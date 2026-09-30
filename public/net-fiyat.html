@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Net Oda Fiyatı</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="ust">
+    <div class="ust-satir">
+      <div class="marka">
+        <nav class="uygulama-menu" aria-label="Yazılımlar">
+          <a href="/">Bütçe 2027</a>
+          <a href="/net-fiyat.html" aria-current="page">Net Oda Fiyatı</a>
+        </nav>
+        <strong id="baslik">Net Oda Fiyatları</strong>
+        <span class="alt-baslik">Satış fiyatı → Erken Rezervasyon → Komisyon → Net</span>
+      </div>
+      <div class="araclar">
+        <span id="kayit-durumu" class="kayit-durumu" aria-live="polite"></span>
+        <button type="button" data-islem="csv">Excel'e aktar (CSV)</button>
+        <button type="button" data-islem="yazdir">Yazdır</button>
+      </div>
+    </div>
+    <div class="kpi-serit" id="kpi-serit"></div>
+  </header>
+  <main id="icerik" class="icerik"></main>
+  <script type="module" src="net-fiyat.js"></script>
+</body>
+</html>

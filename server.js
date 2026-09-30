@@ -7,7 +7,11 @@ import { fileURLToPath } from 'node:url';
 const KOK = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(KOK, 'public');
 const VERI_DIZINI = path.join(KOK, 'data');
-const VERI_DOSYASI = path.join(VERI_DIZINI, 'butce.json');
+// Her yazılımın kendi veri dosyası vardır.
+const DEPOLAR = {
+  '/api/veri': 'butce.json',
+  '/api/net-fiyat': 'net-fiyat.json',
+};
 const YEDEK_DIZINI = path.join(VERI_DIZINI, 'yedek');
 const ORNEK_DOSYASI = path.join(KOK, 'ornek-veri.json');
 const PORT = Number(process.env.PORT) || 3000;
@@ -37,35 +41,37 @@ async function govdeOku(req, sinir = 5 * 1024 * 1024) {
   return Buffer.concat(parcalar).toString('utf8');
 }
 
-async function kaydet(veri) {
+async function kaydet(dosyaAdi, veri) {
+  const dosya = path.join(VERI_DIZINI, dosyaAdi);
   await fs.mkdir(YEDEK_DIZINI, { recursive: true });
   const icerik = JSON.stringify(veri, null, 2);
   // Günde bir yedek: o günün ilk kaydında önceki hali saklanır.
   const bugun = new Date().toISOString().slice(0, 10);
-  const yedek = path.join(YEDEK_DIZINI, `butce-${bugun}.json`);
+  const yedek = path.join(YEDEK_DIZINI, `${path.basename(dosyaAdi, '.json')}-${bugun}.json`);
   try {
     await fs.access(yedek);
   } catch {
     try {
-      await fs.copyFile(VERI_DOSYASI, yedek);
+      await fs.copyFile(dosya, yedek);
     } catch {
       /* henüz kayıt yok */
     }
   }
-  const gecici = VERI_DOSYASI + '.tmp';
+  const gecici = dosya + '.tmp';
   await fs.writeFile(gecici, icerik, 'utf8');
-  await fs.rename(gecici, VERI_DOSYASI);
+  await fs.rename(gecici, dosya);
 }
 
 async function api(req, res, yol) {
-  if (yol === '/api/veri' && req.method === 'GET') {
+  const dosyaAdi = DEPOLAR[yol];
+  if (dosyaAdi && req.method === 'GET') {
     try {
-      return gonder(res, 200, await fs.readFile(VERI_DOSYASI, 'utf8'));
+      return gonder(res, 200, await fs.readFile(path.join(VERI_DIZINI, dosyaAdi), 'utf8'));
     } catch {
-      return gonder(res, 200, {}); // ilk açılış: boş bütçe
+      return gonder(res, 200, {}); // ilk açılış: boş veri
     }
   }
-  if (yol === '/api/veri' && req.method === 'PUT') {
+  if (dosyaAdi && req.method === 'PUT') {
     let veri;
     try {
       veri = JSON.parse(await govdeOku(req));
@@ -75,7 +81,7 @@ async function api(req, res, yol) {
     if (!veri || typeof veri !== 'object' || Array.isArray(veri)) {
       return gonder(res, 400, { hata: 'Geçersiz veri' });
     }
-    await kaydet(veri);
+    await kaydet(dosyaAdi, veri);
     return gonder(res, 200, { tamam: true, zaman: new Date().toISOString() });
   }
   if (yol === '/api/ornek' && req.method === 'GET') {
@@ -107,6 +113,7 @@ const sunucu = http.createServer(async (req, res) => {
 });
 
 sunucu.listen(PORT, HOST, () => {
-  console.log(`Otel Bütçeleme çalışıyor: http://localhost:${PORT}`);
-  console.log(`Veriler şu dosyaya kaydedilir: ${VERI_DOSYASI}`);
+  console.log(`Otel Bütçeleme çalışıyor:  http://localhost:${PORT}`);
+  console.log(`Net Oda Fiyatı hesaplama: http://localhost:${PORT}/net-fiyat.html`);
+  console.log(`Veriler şu klasöre kaydedilir: ${VERI_DIZINI}`);
 });
