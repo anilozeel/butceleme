@@ -16,6 +16,13 @@ export const KATEGORILER = [
   'Diğer Giderler',
 ];
 
+export const AYLAR = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+
+// Aylık kişi girişi yapılmış mı? (en az bir ay dolu)
+export function aylikVarMi(dizi) {
+  return !!dizi && AYLAR.some((_, i) => dizi[i] !== '' && dizi[i] !== null && dizi[i] !== undefined);
+}
+
 export const GIDER_TIPLERI = {
   sabit: 'Sabit (yıllık tutar)',
   degisken: 'Değişken (dolulukla artar)',
@@ -33,6 +40,79 @@ const yuzde = (p) => sayi(p) / 100;
 const sinirla = (x, alt = 0, ust = 1) => Math.min(ust, Math.max(alt, x));
 const bol = (a, b) => (b ? a / b : 0);
 
+function tarihOku(metin) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(metin || '');
+  if (!m) return null;
+  const t = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  return Number.isNaN(t.getTime()) ? null : t;
+}
+const GUN_MS = 86400000;
+const ayinGunSayisi = (yil, ay) => new Date(Date.UTC(yil, ay + 1, 0)).getUTCDate();
+
+/** 2026 tarihinin gün/ayını verilen yıla taşır (2027 sezonu boşsa 2026 ile aynı tarihler). */
+export function yilaTasi(metin, yil) {
+  return tarihOku(metin) ? `${yil}${metin.slice(4)}` : '';
+}
+
+/**
+ * Otelin bir yıldaki çalışma dönemi.
+ *  gun: açık gün sayısı (oda kapasitesi için)
+ *  oranlar: her ay için maaş oranı (tam ay = 1, yarım ay = çalışılan gün / 30, kapalı = 0)
+ *  aylar: açık ayların indeksleri
+ */
+export function donem(otel = {}, yil) {
+  if (otel.calismaSekli === 'sezon') {
+    const bas = tarihOku(otel[`sezon${yil}Bas`] || (yil === 2027 ? yilaTasi(otel.sezon2026Bas, 2027) : ''));
+    const bit = tarihOku(otel[`sezon${yil}Bit`] || (yil === 2027 ? yilaTasi(otel.sezon2026Bit, 2027) : ''));
+    if (bas && bit && bit >= bas) {
+      const oranlar = AYLAR.map((_, ay) => {
+        const y = bas.getUTCFullYear();
+        const ayBas = Date.UTC(y, ay, 1);
+        const ayBit = Date.UTC(y, ay, ayinGunSayisi(y, ay));
+        const g = Math.max(0, (Math.min(ayBit, bit.getTime()) - Math.max(ayBas, bas.getTime())) / GUN_MS + 1);
+        if (g <= 0) return 0;
+        return g >= ayinGunSayisi(y, ay) ? 1 : Math.min(1, g / 30);
+      });
+      return {
+        sezon: true,
+        bas: bas.toISOString().slice(0, 10),
+        bit: bit.toISOString().slice(0, 10),
+        gun: Math.round((bit - bas) / GUN_MS) + 1,
+        oranlar,
+        aylar: AYLAR.map((_, i) => i).filter((i) => oranlar[i] > 0),
+      };
+    }
+  }
+  const gun = yil === 2027 ? ya(otel.acikGun2027, ya(otel.acikGun2026, 365)) : ya(otel.acikGun2026, 365);
+  return { sezon: false, gun, oranlar: AYLAR.map(() => 1), aylar: AYLAR.map((_, i) => i) };
+}
+
+/**
+ * Oda satışları iki şekilde girilebilir:
+ *  - 'toplam': otelin toplam oda sayısı, dönemde satılan toplam oda-gece ve toplam oda geliri
+ *  - 'tip': oda tiplerine göre adet, ortalama fiyat ve doluluk
+ * Toplam giriş tek bir "Tüm odalar" satırına çevrilir; hesabın geri kalanı aynıdır.
+ */
+export function odaSatirlari(veri, gun26, gun27) {
+  if (veri.odaGiris !== 'toplam') return veri.odalar || [];
+  const t = veri.odaToplam || {};
+  const adet = sayi(t.adet);
+  const adet27 = ya(t.adet2027, t.adet);
+  const satilan26 = sayi(t.satilan2026);
+  const kap26 = adet * gun26;
+  const kap27 = adet27 * gun27;
+  return [{
+    ad: 'Tüm odalar',
+    adet,
+    adet2027: t.adet2027,
+    fiyat2026: bol(sayi(t.gelir2026), satilan26),
+    doluluk2026: bol(satilan26, kap26) * 100,
+    fiyatZam: t.fiyatZam,
+    // 2027 satılan oda hedefi girilmemişse 2026 doluluğu korunur.
+    doluluk2027: bos(t.satilan2027) ? '' : bol(sayi(t.satilan2027), kap27) * 100,
+  }];
+}
+
 /**
  * Tüm bütçeyi hesaplar.
  * @param {object} veri  Kullanıcının girdiği veri.
@@ -42,14 +122,16 @@ export function hesaplaTemel(veri, senaryo = {}) {
   const v = veri.varsayimlar || {};
   const otel = veri.otel || {};
   const enflasyon = sayi(v.enflasyon);
-  const gun26 = ya(otel.acikGun2026, 365);
-  const gun27 = ya(otel.acikGun2027, gun26);
+  const donem26 = donem(otel, 2026);
+  const donem27 = donem(otel, 2027);
+  const gun26 = donem26.gun;
+  const gun27 = donem27.gun;
   const fiyatCarpan = ya(senaryo.fiyatCarpan, 1);
   const dolulukPuan = sayi(senaryo.dolulukPuan);
   const dolulukCarpan = ya(senaryo.dolulukCarpan, 1);
 
   // ---- Oda gelirleri ----
-  const odalar = (veri.odalar || []).map((o) => {
+  const odalar = odaSatirlari(veri, gun26, gun27).map((o) => {
     const adet = sayi(o.adet);
     const adet27 = ya(o.adet2027, o.adet);
     const kapasite26 = adet * gun26;
@@ -64,7 +146,7 @@ export function hesaplaTemel(veri, senaryo = {}) {
     const fiyat26 = sayi(o.fiyat2026);
     const fiyat27 = fiyat26 * (1 + zam / 100) * fiyatCarpan;
     return {
-      adet, adet27, zam, fiyat26, fiyat27, doluluk26, doluluk27,
+      ad: o.ad, adet, adet27, zam, fiyat26, fiyat27, doluluk26, doluluk27,
       kapasite26, kapasite27, satilan26, satilan27,
       gelir26: satilan26 * fiyat26,
       gelir27: satilan27 * fiyat27,
@@ -105,13 +187,15 @@ export function hesaplaTemel(veri, senaryo = {}) {
   const gelir27 = oda.gelir27 + digerGelir27;
 
   // ---- Personel ----
+  // Kişi sayısı her ay için ayrı girilir (aylik2026 / aylik2027, 12 elemanlı).
+  // Maaş, ayın çalışılan kısmı kadar ödenir (sezon başlangıç/bitiş ayı kısmi).
+  // Eski tip satırlar (kisi2026 + yılda çalışılan ay) da desteklenir.
+  // "Kişi" = açık aylardaki ortalama kişi sayısı.
   const sgk = yuzde(v.sgkIsveren);
+  const O26 = donem26.oranlar;
+  const O27 = donem27.oranlar;
+  const acikOrt = (vektor, O) => bol(vektor.reduce((t, x, i) => t + x * O[i], 0), O.reduce((t, x) => t + x, 0));
   const personel = (veri.personel || []).map((p) => {
-    const kisi26 = sayi(p.kisi2026);
-    const onerilenKisi27 = p.dolulugaBagli ? Math.round(kisi26 * hacimOrani) : kisi26;
-    const kisi27 = ya(p.kisi2027, onerilenKisi27);
-    const ay = sinirla(ya(p.ay, 12), 0, 12);
-    const ay27 = sinirla(ya(p.ay2027, ay), 0, 12);
     const maas26 = sayi(p.maas2026);
     const temmuzZam = ya(p.temmuzZam, v.temmuzZam);
     // Ocak 2027 maaşı doğrudan girilmişse o, yoksa güncel maaş + Ocak zammı.
@@ -119,34 +203,97 @@ export function hesaplaTemel(veri, senaryo = {}) {
       ? maas26 * (1 + ya(p.ocakZam, v.ocakZam) / 100)
       : sayi(p.maas2027);
     const ocakZam = maas26 ? (maasOcak27 / maas26 - 1) * 100 : 0;
-    // Çalışılan ayların yarısı Ocak zammıyla, kalanı Temmuz zammıyla ödenir.
-    const ayIlkYari = Math.floor(ay27 / 2);
-    const ayIkinciYari = ay27 - ayIlkYari;
     const maasTemmuz27 = maasOcak27 * (1 + temmuzZam / 100);
+    const maas27Ay = (i) => (i < 6 ? maasOcak27 : maasTemmuz27);
     const yanHak26 = sayi(p.yanHak);
     const yanHak27 = yanHak26 * (1 + enflasyon / 100);
+    const ay = sinirla(ya(p.ay, 12), 0, 12);
+    const ay27 = sinirla(ya(p.ay2027, ay), 0, 12);
+    const olcek = p.dolulugaBagli ? hacimOrani : 1;
 
-    const brut26 = kisi26 * maas26 * ay;
-    const brut27 = kisi27 * (maasOcak27 * ayIlkYari + maasTemmuz27 * ayIkinciYari);
-    const maliyet26 = brut26 * (1 + sgk) + kisi26 * yanHak26 * ay;
-    const maliyet27 = brut27 * (1 + sgk) + kisi27 * yanHak27 * ay27;
+    const aylikMi26 = aylikVarMi(p.aylik2026);
+    const aylikMi27 = aylikVarMi(p.aylik2027);
+    // Eski tip: yıl boyu açık otelde yılın bir kısmı çalışan satır.
+    const eskiTip = !aylikMi26 && !aylikMi27 && !donem26.sezon && (ay < 12 || ay27 < 12);
+
+    let aylik26;
+    let aylik27;
+    let onerilenAylik27;
+    let kisiAy26;
+    let kisiAy27;
+    let brut26;
+    let brut27;
+    let kisi26;
+    let kisi27;
+    let onerilenKisi27;
+
+    if (eskiTip) {
+      kisi26 = sayi(p.kisi2026);
+      onerilenKisi27 = Math.round(kisi26 * olcek);
+      kisi27 = ya(p.kisi2027, onerilenKisi27);
+      aylik26 = AYLAR.map(() => (kisi26 * ay) / 12);
+      aylik27 = AYLAR.map(() => (kisi27 * ay27) / 12);
+      onerilenAylik27 = AYLAR.map(() => (onerilenKisi27 * ay27) / 12);
+      const ilkYari = Math.floor(ay27 / 2);
+      kisiAy26 = kisi26 * ay;
+      kisiAy27 = kisi27 * ay27;
+      brut26 = kisiAy26 * maas26;
+      brut27 = kisi27 * (maasOcak27 * ilkYari + maasTemmuz27 * (ay27 - ilkYari));
+    } else {
+      aylik26 = aylikMi26
+        ? AYLAR.map((_, i) => (O26[i] > 0 ? sayi(p.aylik2026[i]) : 0))
+        : AYLAR.map((_, i) => (O26[i] > 0 ? sayi(p.kisi2026) : 0));
+      // 2027 önerisi: 2026'daki aylık kişi sayısı (doluluğa bağlıysa satılan oda artışı oranında).
+      const eskiKisi27 = !aylikMi26 && !bos(p.kisi2027) ? sayi(p.kisi2027) : null;
+      onerilenAylik27 = AYLAR.map((_, i) => {
+        if (O27[i] === 0) return 0;
+        if (eskiKisi27 !== null) return eskiKisi27;
+        const temel = O26[i] > 0 ? aylik26[i] : 0;
+        return Math.round(temel * olcek);
+      });
+      aylik27 = AYLAR.map((_, i) =>
+        O27[i] > 0 ? ya(aylikMi27 ? p.aylik2027[i] : '', onerilenAylik27[i]) : 0);
+      kisiAy26 = aylik26.reduce((t, x, i) => t + x * O26[i], 0);
+      kisiAy27 = aylik27.reduce((t, x, i) => t + x * O27[i], 0);
+      brut26 = kisiAy26 * maas26;
+      brut27 = aylik27.reduce((t, x, i) => t + x * O27[i] * maas27Ay(i), 0);
+      kisi26 = acikOrt(aylik26, O26);
+      kisi27 = acikOrt(aylik27, O27);
+      onerilenKisi27 = acikOrt(onerilenAylik27, O27);
+    }
+
+    const maliyet26 = brut26 * (1 + sgk) + kisiAy26 * yanHak26;
+    const maliyet27 = brut27 * (1 + sgk) + kisiAy27 * yanHak27;
     return {
-      kisi26, kisi27, onerilenKisi27, ay, ay27, maas26, maasOcak27, maasTemmuz27,
-      ocakZam, temmuzZam, maliyet26, maliyet27,
-      kisiBasi27: bol(maliyet27, kisi27 * ay27),
+      aylikMi26, aylikMi27, eskiTip, aylik26, aylik27, onerilenAylik27,
+      kisi26, kisi27, onerilenKisi27, kisiAy26, kisiAy27, ay, ay27,
+      maas26, maasOcak27, maasTemmuz27, ocakZam, temmuzZam, maliyet26, maliyet27,
+      kisiBasi27: bol(maliyet27, kisiAy27),
     };
   });
+  const aylikTopla = (dizi, alan) => AYLAR.map((_, i) => dizi.reduce((t, x) => t + x[alan][i], 0));
   const personelOzet = {
     kisi26: topla(personel, 'kisi26'),
     kisi27: topla(personel, 'kisi27'),
     maliyet26: topla(personel, 'maliyet26'),
     maliyet27: topla(personel, 'maliyet27'),
+    aylik26: aylikTopla(personel, 'aylik26'),
+    aylik27: aylikTopla(personel, 'aylik27'),
   };
+  personelOzet.zirve26 = Math.max(0, ...personelOzet.aylik26);
+  personelOzet.zirve27 = Math.max(0, ...personelOzet.aylik27);
   const departmanlar = {};
   (veri.personel || []).forEach((p, i) => {
     const ad = (p.departman || 'Diğer').trim() || 'Diğer';
-    const d = (departmanlar[ad] ||= { ad, kisi26: 0, kisi27: 0, maliyet26: 0, maliyet27: 0 });
+    const d = (departmanlar[ad] ||= {
+      ad, kisi26: 0, kisi27: 0, maliyet26: 0, maliyet27: 0,
+      aylik26: AYLAR.map(() => 0), aylik27: AYLAR.map(() => 0),
+    });
     for (const k of ['kisi26', 'kisi27', 'maliyet26', 'maliyet27']) d[k] += personel[i][k];
+    AYLAR.forEach((_, m) => {
+      d.aylik26[m] += personel[i].aylik26[m];
+      d.aylik27[m] += personel[i].aylik27[m];
+    });
   });
 
   // ---- Giderler ----
@@ -191,6 +338,7 @@ export function hesaplaTemel(veri, senaryo = {}) {
   const kv27 = Math.max(0, kar27) * kvOran;
 
   return {
+    donem26, donem27,
     hacimOrani,
     odalar, oda,
     digerGelirler, digerGelir26, digerGelir27,
@@ -281,7 +429,10 @@ export function hesapla(veri) {
 
 export function bosVeri() {
   return {
-    otel: { ad: 'Otelim', paraBirimi: '₺', acikGun2026: 365, acikGun2027: '' },
+    otel: {
+      ad: 'Otelim', paraBirimi: '₺', calismaSekli: 'yil', acikGun2026: 365, acikGun2027: '',
+      sezon2026Bas: '', sezon2026Bit: '', sezon2027Bas: '', sezon2027Bit: '',
+    },
     // 2027 zamları kullanıcı kararıdır; boş bırakılanlar %0 kabul edilir.
     varsayimlar: {
       enflasyon: '',
@@ -293,6 +444,8 @@ export function bosVeri() {
       hedefKarMarji: 20,
       kategoriZam: {},
     },
+    odaGiris: 'toplam',
+    odaToplam: { adet: '', satilan2026: '', gelir2026: '', adet2027: '', fiyatZam: '', satilan2027: '' },
     odalar: [],
     digerGelirler: [],
     personel: [],

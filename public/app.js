@@ -1,5 +1,6 @@
 import {
   hesapla, bosVeri, KATEGORILER, GIDER_TIPLERI, DUYARLILIK_FIYAT, DUYARLILIK_DOLULUK,
+  AYLAR, aylikVarMi, donem, yilaTasi,
 } from './calc.js';
 
 let veri = bosVeri();
@@ -25,7 +26,13 @@ const degisim = (a, b) => {
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const yeniId = () => Math.random().toString(36).slice(2, 10);
 
+// Kişi sayısı: ortalamalar küsuratlı olabilir (ör. 12,5 kişi).
+const kisiBicim = (x) => (!gecerli(x) ? '—' : Math.abs(x - Math.round(x)) < 0.05 ? nf0.format(Math.round(x)) : nf1.format(x));
+const tarihBicim = (t) => (t ? t.split('-').reverse().join('.') : '');
+const ayBaslik = (i, oran) => `${AYLAR[i]}<span class="yil">${oran < 1 ? `${Math.round(oran * 30)} gün` : 'tam ay'}</span>`;
+
 const BICIMLER = {
+  kisi: kisiBicim,
   para,
   yuzde: yz,
   sayi0: (x) => (gecerli(x) ? nf0.format(Math.round(x)) : '—'),
@@ -43,7 +50,8 @@ function yolYaz(nesne, yol, deger) {
   const son = parcalar.pop();
   let o = nesne;
   for (const k of parcalar) {
-    if (o[k] == null) o[k] = {};
+    const sonrakiSayi = /^\d+$/.test(parcalar[parcalar.indexOf(k) + 1] ?? son);
+    if (o[k] == null) o[k] = sonrakiSayi ? [] : {};
     o = o[k];
   }
   o[son] = deger;
@@ -61,6 +69,10 @@ function metinGirdi(yol, o = {}) {
   const deger = yolOku(veri, yol);
   return `<input type="text" data-yol="${esc(yol)}" data-tip="metin" class="${o.cls || ''}"
     value="${esc(deger ?? '')}" placeholder="${esc(o.ph ?? '')}" aria-label="${esc(o.etiket || yol)}"${o.yeniden ? ' data-yeniden="1"' : ''}>`;
+}
+function tarihGirdi(yol, o = {}) {
+  const deger = yolOku(veri, yol);
+  return `<input type="date" data-yol="${esc(yol)}" data-tip="metin" data-yeniden="1" value="${esc(deger ?? '')}" aria-label="${esc(o.etiket || yol)}">`;
 }
 function secim(yol, secenekler, o = {}) {
   const deger = yolOku(veri, yol);
@@ -88,7 +100,7 @@ const FN = {
       kpi('2027 Vergi Öncesi Kâr', `<span class="${s.kar27 < 0 ? 'negatif' : ''}">${para(s.kar27)}</span>`, `Marj ${yz(s.marj27)} (2026: ${yz(s.marj26)})`),
       kpi('2027 Ort. Oda Fiyatı (ADR)', para(s.oda.adr27), `2026: ${para(s.oda.adr26)} ${degisim(s.oda.adr26, s.oda.adr27)}`),
       kpi('2027 Doluluk', yz(s.oda.doluluk27), `2026: ${yz(s.oda.doluluk26)}`),
-      kpi('2027 Personel', `${nf0.format(s.personelOzet.kisi27)} kişi`, `2026: ${nf0.format(s.personelOzet.kisi26)} kişi`),
+      kpi('2027 Personel (ort.)', `${kisiBicim(s.personelOzet.kisi27)} kişi`, `En yoğun ay ${kisiBicim(s.personelOzet.zirve27)} · 2026 ort. ${kisiBicim(s.personelOzet.kisi26)}`),
     ].join('');
   },
 
@@ -96,28 +108,57 @@ const FN = {
 
   departmanlar: (s) => {
     if (!s.departmanlar.length) return '<p class="bos">Henüz personel eklenmedi.</p>';
+    const fark = (a, b) => `${b - a > 0.05 ? '+' : ''}${kisiBicim(b - a)}`;
     const satirlar = s.departmanlar.map((d) => `<tr>
       <td class="sol">${esc(d.ad)}</td>
-      <td>${nf0.format(d.kisi26)}</td><td>${nf0.format(d.kisi27)}</td>
-      <td>${d.kisi27 - d.kisi26 > 0 ? '+' : ''}${nf0.format(d.kisi27 - d.kisi26)}</td>
+      <td>${kisiBicim(d.kisi26)}</td><td>${kisiBicim(d.kisi27)}</td><td>${fark(d.kisi26, d.kisi27)}</td>
       <td>${para(d.maliyet26)}</td><td>${para(d.maliyet27)}</td><td>${degisim(d.maliyet26, d.maliyet27)}</td></tr>`).join('');
     const p = s.personelOzet;
     return `<div class="kaydir"><table class="tablo">
-      <thead><tr><th class="sol">Departman</th><th>Kişi<span class="yil">2026</span></th><th>Kişi<span class="yil">2027</span></th><th>Fark</th>
+      <thead><tr><th class="sol">Departman</th><th>Ort. Kişi<span class="yil">2026</span></th><th>Ort. Kişi<span class="yil">2027</span></th><th>Fark</th>
       <th>Maliyet<span class="yil">2026</span></th><th>Maliyet<span class="yil">2027</span></th><th>Değişim</th></tr></thead>
       <tbody>${satirlar}
-      <tr class="toplam"><td class="sol">Toplam</td><td>${nf0.format(p.kisi26)}</td><td>${nf0.format(p.kisi27)}</td>
-      <td>${p.kisi27 - p.kisi26 > 0 ? '+' : ''}${nf0.format(p.kisi27 - p.kisi26)}</td>
+      <tr class="toplam"><td class="sol">Toplam</td><td>${kisiBicim(p.kisi26)}</td><td>${kisiBicim(p.kisi27)}</td><td>${fark(p.kisi26, p.kisi27)}</td>
       <td>${para(p.maliyet26)}</td><td>${para(p.maliyet27)}</td><td>${degisim(p.maliyet26, p.maliyet27)}</td></tr></tbody>
     </table></div>
-    <p class="ipucu">Oda başına personel: 2026 ${nf2.format(s.personelOdaOrani26)} → 2027 ${nf2.format(s.personelOdaOrani27)} ·
+    <p class="ipucu">Ort. kişi = açık aylardaki ortalama. Oda başına personel: 2026 ${nf2.format(s.personelOdaOrani26)} → 2027 ${nf2.format(s.personelOdaOrani27)} ·
       Personel maliyetinin gelire oranı: 2026 ${yz(s.personelOrani26)} → 2027 ${yz(s.personelOrani27)}</p>`;
+  },
+
+  aylikPersonel: (s) => {
+    const aylar = [...new Set([...s.donem26.aylar, ...s.donem27.aylar])].sort((a, b) => a - b);
+    if (!s.departmanlar.length) return '<p class="bos">Henüz personel eklenmedi.</p>';
+    const hucre = (a26, a27) => `<td>${kisiBicim(a27)}<span class="yil">2026: ${kisiBicim(a26)}</span></td>`;
+    const satirlar = s.departmanlar.map((d) => `<tr><td class="sol">${esc(d.ad)}</td>
+      ${aylar.map((i) => hucre(d.aylik26[i], d.aylik27[i])).join('')}</tr>`).join('');
+    const p = s.personelOzet;
+    return `<div class="kaydir"><table class="tablo aylik-ozet">
+      <thead><tr><th class="sol">Departman</th>${aylar.map((i) => `<th>${AYLAR[i]}</th>`).join('')}</tr></thead>
+      <tbody>${satirlar}<tr class="toplam"><td class="sol">Toplam 2027</td>${aylar.map((i) => hucre(p.aylik26[i], p.aylik27[i])).join('')}</tr></tbody>
+    </table></div>`;
+  },
+
+  adrDegisim: (s) => degisim(s.oda.adr26, s.oda.adr27),
+  odaGelirDegisim: (s) => degisim(s.oda.gelir26, s.oda.gelir27),
+
+  donemBilgi: (s) => {
+    const d = s.donem26;
+    return d.sezon
+      ? `Açık gün: <strong>${nf0.format(d.gun)}</strong> (${tarihBicim(d.bas)} – ${tarihBicim(d.bit)})`
+      : `Açık gün: <strong>${nf0.format(d.gun)}</strong>`;
+  },
+
+  donemBilgi27: (s) => {
+    const d = s.donem27;
+    return d.sezon
+      ? `2027 açık gün: <strong>${nf0.format(d.gun)}</strong> (${tarihBicim(d.bas)} – ${tarihBicim(d.bit)})`
+      : `2027 açık gün: <strong>${nf0.format(d.gun)}</strong>`;
   },
 
   kisiOneri: (s) => {
     const oran = s.hacimOrani;
     return `Satılan oda gecelemesi 2027'de <strong>${degisim(1, oran)}</strong> değişiyor.
-      "Doluluğa bağlı" işaretli satırlarda 2027 kişi sayısı boş bırakılırsa bu oranda otomatik önerilir.`;
+      Ay kutusu boş bırakılırsa 2026'daki aynı ayın kişi sayısı kullanılır (gri rakam); "Doluluğa bağlı" satırlarda bu oranda artırılır.`;
   },
 
   hedefKartlar: (s) => {
@@ -151,7 +192,7 @@ const FN = {
     return `<div class="kaydir"><table class="tablo"><thead><tr>
       <th class="sol">Oda Tipi</th><th>Adet</th><th>Fiyat<span class="yil">2026</span></th><th>Planlanan<span class="yil">2027</span></th>
       <th>Hedef marj için<span class="yil">2027</span></th><th>2026'ya göre zam</th></tr></thead><tbody>
-      ${s.odalar.map((o, i) => `<tr><td class="sol">${esc(veri.odalar[i].ad)}</td><td>${nf0.format(o.adet)}</td>
+      ${s.odalar.map((o, i) => `<tr><td class="sol">${esc(o.ad || '')}</td><td>${nf0.format(o.adet)}</td>
         <td>${para(o.fiyat26)}</td><td>${para(o.fiyat27)}</td><td><strong>${para(s.hedef.odaFiyatlari[i].hedef27)}</strong></td>
         <td>${degisim(o.fiyat26, s.hedef.odaFiyatlari[i].hedef27)}</td></tr>`).join('')}
     </tbody></table></div>`;
@@ -200,6 +241,104 @@ function giderKategorileri() {
   return kategoriler;
 }
 
+// ---------------- Oda satışı girişi (toplam / oda tipi) ----------------
+const odaVarMi = () => (veri.odaGiris === 'toplam' ? !!Number(veri.odaToplam?.adet) : veri.odalar.length > 0);
+function odaGirisSecimi() {
+  return `<section class="kart">
+      <h2>Oda Satışlarını Nasıl Gireceksiniz?</h2>
+      <div class="form-izgara">
+        ${alan('Giriş şekli', secim('odaGiris', { toplam: 'Toplam (otelin tamamı)', tip: 'Oda tiplerine göre' }, { yeniden: true, etiket: 'Oda giriş şekli' }),
+          'Toplam: dönemde satılan oda-gece ve oda gelirini tek rakam olarak girersiniz.')}
+      </div>
+    </section>`;
+}
+
+function toplamOda26() {
+  const d = sonuc.donem26;
+  return `<section class="kart">
+      <h2>2026 Toplam Oda Satışı</h2>
+      <p class="aciklama">${d.sezon ? `Sezon dönemi (${tarihBicim(d.bas)} – ${tarihBicim(d.bit)}, ${d.gun} gün)` : `Yıl (${d.gun} açık gün)`} boyunca
+        otelin toplamında gerçekleşen satışları girin. Oda geliri KDV hariç, kahvaltı/pansiyon dahil oda başı satış tutarının toplamıdır.</p>
+      <div class="form-izgara">
+        ${alan('Oda sayısı', sayiGirdi('odaToplam.adet', { min: 0 }))}
+        ${alan('Toplam satılan oda (oda-gece)', sayiGirdi('odaToplam.satilan2026', { min: 0 }), 'Dönem boyunca satılan toplam oda-gece sayısı.')}
+        ${alan(`Toplam oda geliri (${esc(pb())})`, sayiGirdi('odaToplam.gelir2026', { min: 0 }))}
+      </div>
+      <div class="kpi-izgara" style="margin-top:16px">
+        <div class="kpi-kart"><div class="etiket">Ortalama oda fiyatı (ADR)</div><div class="deger" data-cikti="oda.adr26" data-bicim="para"></div></div>
+        <div class="kpi-kart"><div class="etiket">Doluluk</div><div class="deger" data-cikti="oda.doluluk26" data-bicim="yuzde"></div></div>
+        <div class="kpi-kart"><div class="etiket">Satılabilir oda-gece</div><div class="deger" data-cikti="oda.kapasite26" data-bicim="sayi0"></div></div>
+        <div class="kpi-kart"><div class="etiket">RevPAR</div><div class="deger" data-cikti="oda.revpar26" data-bicim="para"></div></div>
+      </div>
+    </section>`;
+}
+
+function toplamOda27(v) {
+  const t = veri.odaToplam || {};
+  const d = sonuc.donem27;
+  return `<section class="kart">
+      <h2>2027 Oda Fiyatı ve Satış Kararları</h2>
+      <p class="aciklama">${d.sezon ? `2027 sezonu (${tarihBicim(d.bas)} – ${tarihBicim(d.bit)}, ${d.gun} gün)` : `2027 (${d.gun} açık gün)`}.
+        Satış hedefi boş bırakılırsa 2026 doluluğu korunur. Fiyat zammı boşsa genel oda fiyatı zammı (${zamPh(v.odaFiyatZam)}) kullanılır.</p>
+      ${t.adet ? '' : '<div class="mesaj">Önce <strong>1 · 2026 Verileri → Odalar &amp; Gelirler</strong> sekmesinde toplam oda satışını girin.</div>'}
+      <div class="form-izgara">
+        ${alan('2027 oda sayısı', sayiGirdi('odaToplam.adet2027', { min: 0, ph: `2026 ile aynı (${t.adet || 0})` }))}
+        ${alan('Oda fiyatı zammı (%)', sayiGirdi('odaToplam.fiyatZam', { ph: zamPh(v.odaFiyatZam) }), '2026 ortalama oda fiyatına göre.')}
+        ${alan('2027 satılan oda hedefi (oda-gece)', sayiGirdi('odaToplam.satilan2027', { min: 0, ph: kisiBicim(sonuc.oda.kapasite27 * sonuc.oda.doluluk26) }),
+          'Boşsa 2026 doluluğuyla hesaplanan sayı (gri).')}
+      </div>
+      <div class="kaydir" style="margin-top:16px"><table class="tablo">
+        <thead><tr><th class="sol">Gösterge</th><th>2026</th><th>2027</th><th>Değişim</th></tr></thead>
+        <tbody>
+          <tr><td class="sol">Ortalama oda fiyatı (ADR)</td>${cikti('oda.adr26')}${cikti('oda.adr27', 'para', 'vurgu')}<td data-fn="adrDegisim"></td></tr>
+          <tr><td class="sol">Satılan oda-gece</td>${cikti('oda.satilan26', 'sayi0')}${cikti('oda.satilan27', 'sayi0')}<td></td></tr>
+          <tr><td class="sol">Doluluk</td>${cikti('oda.doluluk26', 'yuzde')}${cikti('oda.doluluk27', 'yuzde')}<td></td></tr>
+          <tr><td class="sol">Oda geliri</td>${cikti('oda.gelir26')}${cikti('oda.gelir27', 'para', 'vurgu')}<td data-fn="odaGelirDegisim"></td></tr>
+          <tr><td class="sol">RevPAR</td>${cikti('oda.revpar26')}${cikti('oda.revpar27')}<td></td></tr>
+        </tbody>
+      </table></div>
+      <p class="ipucu">Zarar etmemek için gereken fiyatı <strong>3 · Sonuç → Fiyat Hedefi</strong> sekmesinde görebilirsiniz.</p>
+    </section>`;
+}
+
+function tipOda26(satirlar) {
+  return `    <section class="kart">
+      <h2>2026 Oda Satışları</h2>
+      <p class="aciklama">Her oda tipi için 2026 yılında gerçekleşen (veya yıl sonu tahmini) ortalama gecelik satış fiyatını (KDV hariç) ve doluluğu girin.</p>
+      <div class="kaydir"><table class="tablo">
+        <thead><tr><th class="sol">Oda Tipi</th><th>Oda Adedi</th><th>Ort. Satış Fiyatı<span class="yil">2026</span></th>
+          <th>Doluluk %<span class="yil">2026</span></th><th>Satılan Oda-Gece<span class="yil">2026</span></th><th>Oda Geliri<span class="yil">2026</span></th><th></th></tr></thead>
+        <tbody>${satirlar || '<tr><td class="sol bos" colspan="7">Henüz oda tipi yok. Aşağıdan ekleyin.</td></tr>'}
+          <tr class="toplam"><td class="sol">Toplam</td>${cikti('oda.adet', 'sayi0')}${cikti('oda.adr26')}${cikti('oda.doluluk26', 'yuzde')}
+            ${cikti('oda.satilan26', 'sayi0')}${cikti('oda.gelir26')}<td></td></tr>
+        </tbody>
+      </table></div>
+      <button type="button" class="ekle" data-ekle="odalar">+ Oda tipi ekle</button>
+    </section>`;
+}
+
+function tipOda27(satirlar, v) {
+  return `    <section class="kart">
+      <h2>2027 Oda Fiyatı ve Doluluk Kararları</h2>
+      <p class="aciklama">Her oda tipi için 2027 fiyat zammını ve hedef doluluğu belirleyin. Boş bırakılan zam kutusu genel oda fiyatı
+        zammını (${zamPh(v.odaFiyatZam)}), boş doluluk 2026 doluluğunu kullanır. Oda sayısı değişmiyorsa "2027 adet" boş kalabilir.</p>
+      ${veri.odalar.length ? '' : '<div class="mesaj">Önce <strong>1 · 2026 Verileri → Odalar &amp; Gelirler</strong> sekmesinde oda tiplerini girin.</div>'}
+      <div class="kaydir"><table class="tablo">
+        <thead><tr><th class="sol">Oda Tipi</th><th>Adet<span class="yil">2026</span></th><th>Adet<span class="yil">2027</span></th>
+          <th>Ort. Fiyat<span class="yil">2026</span></th><th>Fiyat Zammı %<span class="yil">2027</span></th><th>Ort. Fiyat<span class="yil">2027</span></th>
+          <th>Doluluk<span class="yil">2026</span></th><th>Doluluk % Hedefi<span class="yil">2027</span></th>
+          <th>Satılan Oda-Gece<span class="yil">2027</span></th><th>Oda Geliri<span class="yil">2026</span></th><th>Oda Geliri<span class="yil">2027</span></th></tr></thead>
+        <tbody>${satirlar}
+          <tr class="toplam"><td class="sol">Toplam</td>${cikti('oda.adet', 'sayi0')}${cikti('oda.adet27', 'sayi0')}${cikti('oda.adr26')}<td></td>
+            ${cikti('oda.adr27')}${cikti('oda.doluluk26', 'yuzde')}${cikti('oda.doluluk27', 'yuzde')}${cikti('oda.satilan27', 'sayi0')}
+            ${cikti('oda.gelir26')}${cikti('oda.gelir27')}</tr>
+        </tbody>
+      </table></div>
+      <p class="ipucu">RevPAR (müsait oda başına gelir): 2026 <span data-cikti="oda.revpar26" data-bicim="para"></span> → 2027 <span data-cikti="oda.revpar27" data-bicim="para"></span>.
+        Zarar etmemek için gereken fiyatı <strong>3 · Sonuç → Fiyat Hedefi</strong> sekmesinde görebilirsiniz.</p>
+    </section>`;
+}
+
 const SEKMELER = {
   // ======================= 1 · 2026 VERİLERİ =======================
   'v26-odalar': () => {
@@ -221,22 +360,15 @@ const SEKMELER = {
       <div class="form-izgara">
         ${alan('Otel adı', metinGirdi('otel.ad', { cls: 'uzun' }))}
         ${alan('Para birimi', metinGirdi('otel.paraBirimi', { cls: 'kisa' }))}
-        ${alan('2026 açık gün sayısı', sayiGirdi('otel.acikGun2026', { min: 0, max: 366 }), 'Yıl boyu açıksa 365. Sezonluk otellerde açık kalınan gün.')}
+        ${alan('Çalışma şekli', secim('otel.calismaSekli', { yil: 'Yıl boyu açık', sezon: 'Sezonluk (tarih aralığı)' }, { yeniden: true, etiket: 'Çalışma şekli' }))}
+        ${veri.otel.calismaSekli === 'sezon'
+          ? `${alan('2026 sezon açılışı', tarihGirdi('otel.sezon2026Bas'))}
+             ${alan('2026 sezon kapanışı', tarihGirdi('otel.sezon2026Bit'), fnAlan('donemBilgi', 'span'))}`
+          : alan('2026 açık gün sayısı', sayiGirdi('otel.acikGun2026', { min: 0, max: 366 }), fnAlan('donemBilgi', 'span'))}
       </div>
     </section>
-    <section class="kart">
-      <h2>2026 Oda Satışları</h2>
-      <p class="aciklama">Her oda tipi için 2026 yılında gerçekleşen (veya yıl sonu tahmini) ortalama gecelik satış fiyatını (KDV hariç) ve doluluğu girin.</p>
-      <div class="kaydir"><table class="tablo">
-        <thead><tr><th class="sol">Oda Tipi</th><th>Oda Adedi</th><th>Ort. Satış Fiyatı<span class="yil">2026</span></th>
-          <th>Doluluk %<span class="yil">2026</span></th><th>Satılan Oda-Gece<span class="yil">2026</span></th><th>Oda Geliri<span class="yil">2026</span></th><th></th></tr></thead>
-        <tbody>${satirlar || '<tr><td class="sol bos" colspan="7">Henüz oda tipi yok. Aşağıdan ekleyin.</td></tr>'}
-          <tr class="toplam"><td class="sol">Toplam</td>${cikti('oda.adet', 'sayi0')}${cikti('oda.adr26')}${cikti('oda.doluluk26', 'yuzde')}
-            ${cikti('oda.satilan26', 'sayi0')}${cikti('oda.gelir26')}<td></td></tr>
-        </tbody>
-      </table></div>
-      <button type="button" class="ekle" data-ekle="odalar">+ Oda tipi ekle</button>
-    </section>
+    ${odaGirisSecimi()}
+    ${veri.odaGiris === 'toplam' ? toplamOda26() : tipOda26(satirlar)}
     <section class="kart">
       <h2>2026 Diğer Gelirler</h2>
       <p class="aciklama">Yiyecek-içecek, SPA, toplantı gibi oda dışı gelirlerin 2026 yıllık tutarı.
@@ -252,34 +384,42 @@ const SEKMELER = {
   },
 
   'v26-personel': () => {
+    const d = sonuc.donem26;
     const satirlar = veri.personel.map((p, i) => `<tr>
       <td class="sol girdi">${metinGirdi(`personel.${i}.departman`, { ph: 'Departman', etiket: 'Departman' })}</td>
       <td class="sol girdi">${metinGirdi(`personel.${i}.pozisyon`, { ph: 'Pozisyon', etiket: 'Pozisyon' })}</td>
-      <td class="girdi">${sayiGirdi(`personel.${i}.kisi2026`, { cls: 'kisa', min: 0, etiket: '2026 kişi' })}</td>
+      <td class="girdi"><input type="number" class="ay-girdi doldur" min="0" data-doldur="personel.${i}.aylik2026" data-yil="2026"
+        placeholder="→" aria-label="Tüm aylara aynı kişi sayısını yaz" title="Tüm aylara aynı sayıyı yaz"></td>
+      ${d.aylar.map((m) => `<td class="girdi">${sayiGirdi(`personel.${i}.aylik2026.${m}`, {
+        cls: 'ay-girdi', min: 0, etiket: `${AYLAR[m]} 2026 kişi`,
+        ph: sonuc.personel[i]?.eskiTip ? '' : '0' })}</td>`).join('')}
+      ${cikti(`personel.${i}.kisi26`, 'kisi')}
       <td class="girdi">${sayiGirdi(`personel.${i}.maas2026`, { min: 0, etiket: 'Güncel brüt maaş' })}</td>
       <td class="girdi">${sayiGirdi(`personel.${i}.yanHak`, { min: 0, ph: '0', etiket: 'Aylık yan hak' })}</td>
-      <td class="girdi">${sayiGirdi(`personel.${i}.ay`, { cls: 'kisa', min: 0, max: 12, ph: '12', etiket: 'Çalışma ayı' })}</td>
       ${cikti(`personel.${i}.maliyet26`)}
       <td>${silDugme('personel', i)}</td></tr>`).join('');
     return `
     <section class="kart">
       <h2>2026 Personel ve Maaşlar</h2>
-      <p class="aciklama">Her pozisyon için bugünkü kişi sayısını ve güncel <strong>brüt</strong> aylık maaşı girin.
-        Yemek, servis, lojman gibi yan hakları kişi başı aylık tutar olarak yazın. Sezonluk personelde yılda kaç ay çalıştığını girin.</p>
+      <p class="aciklama">Her pozisyonda <strong>her ay kaç kişi çalıştığını</strong> girin. Aynı sayı her ay geçerliyse ilk kutuya (→) yazın, tüm aylara dağıtılır.
+        Maaş: güncel <strong>brüt</strong> aylık maaş. Yemek, servis, lojman gibi yan hakları kişi başı aylık tutar olarak yazın.
+        ${d.sezon ? `Sezon ${tarihBicim(d.bas)} – ${tarihBicim(d.bit)}: kısmi aylarda maaş çalışılan gün / 30 oranında hesaplanır.` : ''}</p>
       <div class="form-izgara" style="margin-bottom:12px">
         ${alan('SGK işveren payı (%)', sayiGirdi('varsayimlar.sgkIsveren'), 'İşveren SGK + işsizlik primi; teşvikten yararlanıyorsanız indirimli oranı girin. Bordronuzla kontrol edin.')}
       </div>
-      <div class="kaydir"><table class="tablo">
-        <thead><tr><th class="sol">Departman</th><th class="sol">Pozisyon</th><th>Kişi Sayısı<span class="yil">2026</span></th>
-          <th>Brüt Maaş<span class="yil">güncel / ay</span></th><th>Yan Hak<span class="yil">kişi / ay</span></th><th>Çalışma<span class="yil">ay / yıl</span></th>
-          <th>Yıllık Maliyet<span class="yil">2026</span></th><th></th></tr></thead>
-        <tbody>${satirlar || '<tr><td class="sol bos" colspan="8">Henüz personel yok. Aşağıdan ekleyin.</td></tr>'}
-          <tr class="toplam"><td class="sol" colspan="2">Toplam</td>${cikti('personelOzet.kisi26', 'sayi0')}<td colspan="3"></td>
-            ${cikti('personelOzet.maliyet26')}<td></td></tr>
+      <div class="kaydir"><table class="tablo personel-tablo">
+        <thead><tr><th class="sol">Departman</th><th class="sol">Pozisyon</th><th>Tümü<span class="yil">→</span></th>
+          ${d.aylar.map((m) => `<th>${ayBaslik(m, d.oranlar[m])}</th>`).join('')}
+          <th>Ort. Kişi<span class="yil">2026</span></th><th>Brüt Maaş<span class="yil">güncel / ay</span></th><th>Yan Hak<span class="yil">kişi / ay</span></th>
+          <th>Maliyet<span class="yil">2026</span></th><th></th></tr></thead>
+        <tbody>${satirlar || `<tr><td class="sol bos" colspan="${d.aylar.length + 8}">Henüz personel yok. Aşağıdan ekleyin.</td></tr>`}
+          <tr class="toplam"><td class="sol" colspan="3">Toplam kişi</td>
+            ${d.aylar.map((m) => cikti(`personelOzet.aylik26.${m}`, 'kisi')).join('')}
+            ${cikti('personelOzet.kisi26', 'kisi')}<td colspan="2"></td>${cikti('personelOzet.maliyet26')}<td></td></tr>
         </tbody>
       </table></div>
       <button type="button" class="ekle" data-ekle="personel">+ Personel satırı ekle</button>
-      <p class="ipucu">Yıllık maliyet = kişi × brüt maaş × ay × (1 + SGK işveren payı) + yan haklar. Güncel maaşla 12 ay üzerinden hesaplanır.</p>
+      <p class="ipucu">Maliyet = Σ (ay kişi sayısı × brüt maaş × ayın çalışılan oranı) × (1 + SGK işveren payı) + yan haklar.</p>
     </section>`;
   },
 
@@ -339,7 +479,10 @@ const SEKMELER = {
         ${alan('Oda fiyatı zammı (%)', sayiGirdi(`${v}.odaFiyatZam`, { ph: '%0' }), '2026 ortalama fiyatına göre.')}
         ${alan('Maaş zammı – Ocak 2027 (%)', sayiGirdi(`${v}.ocakZam`, { ph: '%0' }), 'Güncel maaşa göre.')}
         ${alan('Maaş zammı – Temmuz 2027 (%)', sayiGirdi(`${v}.temmuzZam`, { ph: '%0' }), 'Ocak zamlı maaşın üzerine.')}
-        ${alan('2027 açık gün sayısı', sayiGirdi('otel.acikGun2027', { min: 0, max: 366, ph: `2026 ile aynı (${veri.otel.acikGun2026 ?? 365})` }))}
+        ${veri.otel.calismaSekli === 'sezon'
+          ? `${alan('2027 sezon açılışı', tarihGirdi('otel.sezon2027Bas'), `Boşsa ${tarihBicim(yilaTasi(veri.otel.sezon2026Bas, 2027)) || '2026 ile aynı gün'}`)}
+             ${alan('2027 sezon kapanışı', tarihGirdi('otel.sezon2027Bit'), `Boşsa ${tarihBicim(yilaTasi(veri.otel.sezon2026Bit, 2027)) || '2026 ile aynı gün'} · ${fnAlan('donemBilgi27', 'span')}`)}`
+          : alan('2027 açık gün sayısı', sayiGirdi('otel.acikGun2027', { min: 0, max: 366, ph: `2026 ile aynı (${veri.otel.acikGun2026 ?? 365})` }), fnAlan('donemBilgi27', 'span'))}
         ${alan('Kurumlar vergisi (%)', sayiGirdi(`${v}.kurumlarVergisi`))}
       </div>
     </section>
@@ -369,25 +512,7 @@ const SEKMELER = {
       <td class="girdi">${sayiGirdi(`digerGelirler.${i}.artis`, { cls: 'kisa', ph: zamPh(v.enflasyon), etiket: 'Fiyat artışı' })}</td>
       ${cikti(`digerGelirler.${i}.tutar27`)}</tr>`).join('');
     return `
-    <section class="kart">
-      <h2>2027 Oda Fiyatı ve Doluluk Kararları</h2>
-      <p class="aciklama">Her oda tipi için 2027 fiyat zammını ve hedef doluluğu belirleyin. Boş bırakılan zam kutusu genel oda fiyatı
-        zammını (${zamPh(v.odaFiyatZam)}), boş doluluk 2026 doluluğunu kullanır. Oda sayısı değişmiyorsa "2027 adet" boş kalabilir.</p>
-      ${veri.odalar.length ? '' : '<div class="mesaj">Önce <strong>1 · 2026 Verileri → Odalar &amp; Gelirler</strong> sekmesinde oda tiplerini girin.</div>'}
-      <div class="kaydir"><table class="tablo">
-        <thead><tr><th class="sol">Oda Tipi</th><th>Adet<span class="yil">2026</span></th><th>Adet<span class="yil">2027</span></th>
-          <th>Ort. Fiyat<span class="yil">2026</span></th><th>Fiyat Zammı %<span class="yil">2027</span></th><th>Ort. Fiyat<span class="yil">2027</span></th>
-          <th>Doluluk<span class="yil">2026</span></th><th>Doluluk % Hedefi<span class="yil">2027</span></th>
-          <th>Satılan Oda-Gece<span class="yil">2027</span></th><th>Oda Geliri<span class="yil">2026</span></th><th>Oda Geliri<span class="yil">2027</span></th></tr></thead>
-        <tbody>${satirlar}
-          <tr class="toplam"><td class="sol">Toplam</td>${cikti('oda.adet', 'sayi0')}${cikti('oda.adet27', 'sayi0')}${cikti('oda.adr26')}<td></td>
-            ${cikti('oda.adr27')}${cikti('oda.doluluk26', 'yuzde')}${cikti('oda.doluluk27', 'yuzde')}${cikti('oda.satilan27', 'sayi0')}
-            ${cikti('oda.gelir26')}${cikti('oda.gelir27')}</tr>
-        </tbody>
-      </table></div>
-      <p class="ipucu">RevPAR (müsait oda başına gelir): 2026 <span data-cikti="oda.revpar26" data-bicim="para"></span> → 2027 <span data-cikti="oda.revpar27" data-bicim="para"></span>.
-        Zarar etmemek için gereken fiyatı <strong>3 · Sonuç → Fiyat Hedefi</strong> sekmesinde görebilirsiniz.</p>
-    </section>
+    ${veri.odaGiris === 'toplam' ? toplamOda27(v) : tipOda27(satirlar, v)}
     ${veri.digerGelirler.length ? `<section class="kart">
       <h2>2027 Diğer Gelirler</h2>
       <p class="aciklama">Oda dışı gelirlerde 2027 fiyat artışı. Boş bırakılanlar genel enflasyonu (${zamPh(v.enflasyon)}) kullanır.</p>
@@ -402,43 +527,55 @@ const SEKMELER = {
 
   'k27-personel': () => {
     const v = veri.varsayimlar;
-    const satirlar = veri.personel.map((p, i) => `<tr>
+    const d = sonuc.donem27;
+    const satirlar = veri.personel.map((p, i) => {
+      const r = sonuc.personel[i];
+      return `<tr>
       <td class="sol girdi">${metinGirdi(`personel.${i}.departman`, { ph: 'Departman', etiket: 'Departman' })}</td>
       <td class="sol girdi">${metinGirdi(`personel.${i}.pozisyon`, { ph: 'Pozisyon', etiket: 'Pozisyon' })}</td>
-      ${ro(nf0.format(Number(p.kisi2026) || 0))}
       <td class="girdi" style="text-align:center">${kutu(`personel.${i}.dolulugaBagli`, { yeniden: true, etiket: 'Doluluğa bağlı' })}</td>
-      <td class="girdi">${sayiGirdi(`personel.${i}.kisi2027`, { cls: 'kisa', min: 0, ph: String(sonuc.personel[i]?.onerilenKisi27 ?? ''), etiket: '2027 kişi' })}</td>
+      <td class="girdi"><input type="number" class="ay-girdi doldur" min="0" data-doldur="personel.${i}.aylik2027" data-yil="2027"
+        placeholder="→" aria-label="Tüm aylara aynı kişi sayısını yaz" title="Tüm aylara aynı sayıyı yaz"></td>
+      ${d.aylar.map((m) => `<td class="girdi">${sayiGirdi(`personel.${i}.aylik2027.${m}`, {
+        cls: 'ay-girdi', min: 0, etiket: `${AYLAR[m]} 2027 kişi`, ph: kisiBicim(r?.onerilenAylik27[m] ?? 0) })}</td>`).join('')}
+      ${cikti(`personel.${i}.kisi27`, 'kisi')}
       ${roPara(p.maas2026)}
       <td class="girdi">${sayiGirdi(`personel.${i}.ocakZam`, { cls: 'kisa', ph: zamPh(v.ocakZam), etiket: 'Ocak zammı' })}</td>
       <td class="girdi">${sayiGirdi(`personel.${i}.maas2027`, { ph: 'veya tutar', etiket: 'Ocak 2027 brüt maaş (doğrudan)' })}</td>
       <td class="girdi">${sayiGirdi(`personel.${i}.temmuzZam`, { cls: 'kisa', ph: zamPh(v.temmuzZam), etiket: 'Temmuz zammı' })}</td>
-      <td class="girdi">${sayiGirdi(`personel.${i}.ay2027`, { cls: 'kisa', min: 0, max: 12, ph: String(p.ay || 12), etiket: '2027 çalışma ayı' })}</td>
       ${cikti(`personel.${i}.maasOcak27`)}${cikti(`personel.${i}.maasTemmuz27`)}
       ${cikti(`personel.${i}.maliyet26`)}${cikti(`personel.${i}.maliyet27`)}
-      <td>${silDugme('personel', i)}</td></tr>`).join('');
+      <td>${silDugme('personel', i)}</td></tr>`;
+    }).join('');
     return `
     <section class="kart">
       <h2>2027 Personel ve Maaş Kararları</h2>
-      <p class="aciklama">Her pozisyon için 2027'de kaç kişi çalışacağını ve maaş zammını belirleyin. Zam kutusu boşsa genel zam
-        (Ocak ${zamPh(v.ocakZam)}, Temmuz ${zamPh(v.temmuzZam)}) uygulanır. Zam yerine Ocak 2027 brüt maaşını doğrudan da yazabilirsiniz.</p>
+      <p class="aciklama">2027'de her ay kaç kişi çalışacağını ve maaş zammını belirleyin. Zam kutusu boşsa genel zam
+        (Ocak ${zamPh(v.ocakZam)}, Temmuz ${zamPh(v.temmuzZam)}) uygulanır; zam yerine Ocak 2027 brüt maaşını doğrudan da yazabilirsiniz.
+        Ocak–Haziran ayları Ocak maaşıyla, Temmuz–Aralık ayları Temmuz zamlı maaşla hesaplanır.</p>
       <p class="aciklama">${fnAlan('kisiOneri', 'span')}</p>
-      <div class="kaydir"><table class="tablo">
-        <thead><tr><th class="sol">Departman</th><th class="sol">Pozisyon</th><th>Kişi<span class="yil">2026</span></th>
-          <th>Doluluğa<span class="yil">bağlı</span></th><th>Kişi Kararı<span class="yil">2027</span></th>
-          <th>Brüt Maaş<span class="yil">güncel</span></th><th>Ocak Zammı<span class="yil">%</span></th><th>veya Ocak Maaşı<span class="yil">brüt, doğrudan</span></th>
-          <th>Temmuz Zammı<span class="yil">%</span></th><th>Çalışma Ayı<span class="yil">2027</span></th>
+      <div class="kaydir"><table class="tablo personel-tablo">
+        <thead><tr><th class="sol">Departman</th><th class="sol">Pozisyon</th><th>Doluluğa<span class="yil">bağlı</span></th><th>Tümü<span class="yil">→</span></th>
+          ${d.aylar.map((m) => `<th>${ayBaslik(m, d.oranlar[m])}</th>`).join('')}
+          <th>Ort. Kişi<span class="yil">2027</span></th><th>Brüt Maaş<span class="yil">güncel</span></th><th>Ocak Zammı<span class="yil">%</span></th>
+          <th>veya Ocak Maaşı<span class="yil">brüt, doğrudan</span></th><th>Temmuz Zammı<span class="yil">%</span></th>
           <th>Brüt Maaş<span class="yil">Oca 2027</span></th><th>Brüt Maaş<span class="yil">Tem 2027</span></th>
-          <th>Yıllık Maliyet<span class="yil">2026</span></th><th>Yıllık Maliyet<span class="yil">2027</span></th><th></th></tr></thead>
-        <tbody>${satirlar || '<tr><td class="sol bos" colspan="15">Önce 2026 personelini girin.</td></tr>'}
-          <tr class="toplam"><td class="sol" colspan="2">Toplam</td>${cikti('personelOzet.kisi26', 'sayi0')}<td></td>${cikti('personelOzet.kisi27', 'sayi0')}
-            <td colspan="7"></td>${cikti('personelOzet.maliyet26')}${cikti('personelOzet.maliyet27')}<td></td></tr>
+          <th>Maliyet<span class="yil">2026</span></th><th>Maliyet<span class="yil">2027</span></th><th></th></tr></thead>
+        <tbody>${satirlar || `<tr><td class="sol bos" colspan="${d.aylar.length + 14}">Önce 2026 personelini girin.</td></tr>`}
+          <tr class="toplam"><td class="sol" colspan="4">Toplam kişi</td>
+            ${d.aylar.map((m) => cikti(`personelOzet.aylik27.${m}`, 'kisi')).join('')}
+            ${cikti('personelOzet.kisi27', 'kisi')}<td colspan="6"></td>${cikti('personelOzet.maliyet26')}${cikti('personelOzet.maliyet27')}<td></td></tr>
         </tbody>
       </table></div>
       <button type="button" class="ekle" data-ekle="personel" data-yeni27="1">+ 2027'de yeni pozisyon ekle</button>
-      <p class="ipucu">2027'de çalışılan ayların ilk yarısı Ocak maaşıyla, ikinci yarısı Temmuz zamlı maaşla hesaplanır. Yan haklar genel enflasyon kadar artar.</p>
     </section>
     <section class="kart">
-      <h2>Departman Özeti – Kaç Kişi Çalışacağız?</h2>
+      <h2>Aylık Personel Planı – Her Ay Kaç Kişi Çalışacak?</h2>
+      <p class="aciklama">Büyük rakam 2027 planı, altındaki 2026.</p>
+      ${fnAlan('aylikPersonel')}
+    </section>
+    <section class="kart">
+      <h2>Departman Özeti</h2>
       ${fnAlan('departmanlar')}
     </section>`;
   },
@@ -512,7 +649,7 @@ const SEKMELER = {
 };
 
 function ozetHtml(s) {
-  if (!veri.odalar.length && !veri.personel.length && !veri.giderler.length) {
+  if (!odaVarMi() && !veri.personel.length && !veri.giderler.length) {
     return `<section class="kart baslarken">
       <h2>Başlarken</h2>
       <p class="aciklama">Bütçe üç adımda hazırlanır:</p>
@@ -613,7 +750,7 @@ function menuCiz() {
 }
 
 function sekmeCiz() {
-  if (!SEKMELER[aktifSekme]) aktifSekme = veri.odalar.length ? 'ozet' : 'v26-odalar';
+  if (!SEKMELER[aktifSekme]) aktifSekme = odaVarMi() ? 'ozet' : 'v26-odalar';
   menuCiz();
   sonuc = hesapla(veri);
   const sira = SIRA.findIndex((x) => x.id === aktifSekme);
@@ -682,6 +819,17 @@ function veriyiKoy(yeni) {
     if (!Array.isArray(veri[liste])) veri[liste] = [];
   }
   veri.varsayimlar.kategoriZam ||= {};
+  if (!yeni.odaGiris) veri.odaGiris = veri.odalar.length ? 'tip' : 'toplam';
+  veri.odaToplam = { ...temel.odaToplam, ...(yeni.odaToplam || {}) };
+  // Eski kayıtlar: tek kişi sayısı girilmiş, yıl boyu çalışan satırları aylık girişe çevir.
+  for (const p of veri.personel) {
+    const tamYil = (x) => x === '' || x == null || Number(x) >= 12;
+    if (!aylikVarMi(p.aylik2026) && p.kisi2026 !== '' && p.kisi2026 != null && tamYil(p.ay) && tamYil(p.ay2027)) {
+      p.aylik2026 = AYLAR.map(() => Number(p.kisi2026) || 0);
+      if (!aylikVarMi(p.aylik2027) && p.kisi2027 !== '' && p.kisi2027 != null) p.aylik2027 = AYLAR.map(() => Number(p.kisi2027) || 0);
+      delete p.kisi2026; delete p.kisi2027; delete p.ay; delete p.ay2027;
+    }
+  }
 }
 
 // ---------------- Olaylar ----------------
@@ -697,6 +845,23 @@ function girdiDegisti(el) {
   kaydetPlanla();
 }
 
+// "Tümü →" kutusu: yazılan sayıyı o yılın açık aylarının hepsine yazar.
+document.addEventListener('input', (e) => {
+  const el = e.target.closest('[data-doldur]');
+  if (!el) return;
+  const yil = Number(el.dataset.yil);
+  const aylar = donem(veri.otel, yil).aylar;
+  const deger = el.value === '' ? '' : Number(el.value);
+  for (const m of aylar) {
+    const yol = `${el.dataset.doldur}.${m}`;
+    yolYaz(veri, yol, deger);
+    const kutu = document.querySelector(`[data-yol="${yol}"]`);
+    if (kutu) kutu.value = deger;
+  }
+  ciktilariYaz();
+  kaydetPlanla();
+});
+
 document.addEventListener('input', (e) => {
   const el = e.target.closest('[data-yol]');
   if (el && el.tagName === 'INPUT' && el.type !== 'checkbox') girdiDegisti(el);
@@ -709,7 +874,7 @@ document.addEventListener('change', (e) => {
 const YENI_SATIR = {
   odalar: () => ({ id: yeniId(), ad: '', adet: 0, fiyat2026: 0, doluluk2026: 0, adet2027: '', fiyatZam: '', doluluk2027: '' }),
   digerGelirler: () => ({ id: yeniId(), ad: '', tutar2026: 0, tip: 'sabit', artis: '' }),
-  personel: () => ({ id: yeniId(), departman: '', pozisyon: '', kisi2026: 1, kisi2027: '', maas2026: 0, ay: 12, yanHak: '', dolulugaBagli: false, ocakZam: '', maas2027: '', temmuzZam: '', ay2027: '' }),
+  personel: () => ({ id: yeniId(), departman: '', pozisyon: '', aylik2026: AYLAR.map(() => ''), aylik2027: AYLAR.map(() => ''), maas2026: 0, yanHak: '', dolulugaBagli: false, ocakZam: '', maas2027: '', temmuzZam: '' }),
   giderler: (kategori) => ({ id: yeniId(), kategori: kategori || 'Diğer Giderler', ad: '', tip: 'sabit', tutar2026: 0, artis: '', tutar2027: '', baz: 'oda', oran: 0, oran2027: '' }),
 };
 
@@ -726,7 +891,7 @@ document.addEventListener('click', async (e) => {
   if (ekle) {
     const liste = ekle.dataset.ekle;
     const satir = YENI_SATIR[liste](ekle.dataset.kategori);
-    if (ekle.dataset.yeni27 && liste === 'personel') Object.assign(satir, { kisi2026: 0, kisi2027: 1 });
+    if (ekle.dataset.yeni27 && liste === 'personel') Object.assign(satir, { aylik2026: AYLAR.map(() => 0) });
     veri[liste].push(satir);
     sekmeCiz();
     kaydetPlanla();
@@ -819,15 +984,17 @@ function csvOlustur() {
   ekle('NET KÂR', s.net26, s.net27);
   ekle();
   ekle('ODALAR', 'Adet', 'Fiyat 2026', 'Doluluk % 2026', 'Fiyat 2027', 'Doluluk % 2027', 'Satılan 2026', 'Satılan 2027', 'Gelir 2026', 'Gelir 2027', 'Hedef Fiyat 2027');
-  veri.odalar.forEach((o, i) => {
-    const r = s.odalar[i];
-    ekle(o.ad, r.adet, r.fiyat26, r.doluluk26 * 100, r.fiyat27, r.doluluk27 * 100, r.satilan26, r.satilan27, r.gelir26, r.gelir27, s.hedef.odaFiyatlari[i].hedef27 ?? '');
+  s.odalar.forEach((r, i) => {
+    ekle(r.ad, r.adet, r.fiyat26, r.doluluk26 * 100, r.fiyat27, r.doluluk27 * 100, r.satilan26, r.satilan27, r.gelir26, r.gelir27, s.hedef.odaFiyatlari[i].hedef27 ?? '');
   });
   ekle();
-  ekle('PERSONEL', 'Pozisyon', 'Kişi 2026', 'Kişi 2027', 'Brüt Maaş Güncel', 'Brüt Maaş Oca 2027', 'Brüt Maaş Tem 2027', 'Çalışma Ayı', 'Maliyet 2026', 'Maliyet 2027');
+  const csvAylar = [...new Set([...s.donem26.aylar, ...s.donem27.aylar])].sort((a, b) => a - b);
+  ekle('PERSONEL', 'Pozisyon', 'Ort. Kişi 2026', 'Ort. Kişi 2027', 'Brüt Maaş Güncel', 'Brüt Maaş Oca 2027', 'Brüt Maaş Tem 2027', 'Maliyet 2026', 'Maliyet 2027',
+    ...csvAylar.map((m) => `${AYLAR[m]} 2026`), ...csvAylar.map((m) => `${AYLAR[m]} 2027`));
   veri.personel.forEach((p, i) => {
     const r = s.personel[i];
-    ekle(p.departman, p.pozisyon, r.kisi26, r.kisi27, r.maas26, r.maasOcak27, r.maasTemmuz27, r.ay, r.maliyet26, r.maliyet27);
+    ekle(p.departman, p.pozisyon, r.kisi26, r.kisi27, r.maas26, r.maasOcak27, r.maasTemmuz27, r.maliyet26, r.maliyet27,
+      ...csvAylar.map((m) => r.aylik26[m]), ...csvAylar.map((m) => r.aylik27[m]));
   });
   ekle();
   ekle('GİDERLER', 'Kalem', 'Tip', 'Zam %', 'Tutar 2026', 'Tutar 2027');

@@ -20,16 +20,16 @@ Program boş açılır. Bütçe üç adımda hazırlanır:
 ### 1 · 2026 Verileri — gerçekleşeni girin
 | Sekme | Girilenler |
 |---|---|
-| **Odalar & Gelirler** | Otel adı, açık gün, oda tipleri, adet, 2026 ortalama satış fiyatı ve doluluk; yiyecek-içecek, SPA gibi diğer gelirler |
-| **Personel** | Departman, pozisyon, kişi sayısı, güncel brüt maaş, yan haklar, çalışma ayı, SGK işveren payı |
+| **Odalar & Gelirler** | Yıl boyu açık mı, sezonluk mu (ör. 15 Mayıs – 30 Eylül); **toplam** oda sayısı, satılan oda-gece ve oda geliri — veya istenirse oda tiplerine göre; yiyecek-içecek, SPA gibi diğer gelirler |
+| **Personel** | Departman, pozisyon, **her ay kaç kişi çalıştığı**, güncel brüt maaş, yan haklar, SGK işveren payı |
 | **Giderler** | Vergi ve harçlar, kira, elektrik, su, doğalgaz, komisyonlar, pazarlama, bakım, sigorta, genel giderler… ve her birinin nasıl oluştuğu (sabit / değişken / gelirin yüzdesi) |
 
 ### 2 · 2027 Kararları — kararları verin
 | Sekme | Karar verilenler |
 |---|---|
-| **Genel Zamlar** | Enflasyon beklentisi, oda fiyatı zammı, Ocak/Temmuz maaş zamları, 2027 açık gün, kira/elektrik/vergi gibi kategorilere özel zamlar |
-| **Oda Fiyatı & Doluluk** | Oda tipi bazında fiyat zammı, hedef doluluk, oda sayısı değişimi |
-| **Personel & Maaş** | 2027'de kaç kişi çalışacağı, pozisyon bazında zam veya doğrudan yeni maaş, yeni pozisyonlar |
+| **Genel Zamlar** | Enflasyon beklentisi, oda fiyatı zammı, Ocak/Temmuz maaş zamları, 2027 sezon tarihleri, kira/elektrik/vergi gibi kategorilere özel zamlar |
+| **Oda Fiyatı & Doluluk** | Oda fiyatı zammı, 2027 satılan oda hedefi (veya oda tipi bazında doluluk), oda sayısı değişimi |
+| **Personel & Maaş** | 2027'de her ay kaç kişi çalışacağı, pozisyon bazında zam veya doğrudan yeni maaş, yeni pozisyonlar, aylık personel planı |
 | **Gider Zamları** | Kalem bazında zam oranı veya kesinleşmiş 2027 tutarı (ör. kira sözleşmesi) |
 
 ### 3 · Sonuç
@@ -45,10 +45,15 @@ Nasıl göründüğünü görmek için **Diğer → Örnek veriyi yükle** ile 1
 
 ## Hesaplama Mantığı
 
+- **Sezon**: 15.05 – 30.09 gibi bir aralık girilirse açık gün sayısı (139) ve aylar tarihlerden hesaplanır.
+  2027 tarihleri boş bırakılırsa 2026 ile aynı gün/ay kullanılır.
+- **Toplam oda girişi**: ortalama fiyat = oda geliri ÷ satılan oda-gece; doluluk = satılan oda-gece ÷ (oda sayısı × açık gün).
 - **Oda geliri** = oda adedi × açık gün × doluluk × ortalama fiyat
 - **2027 fiyat** = 2026 fiyat × (1 + zam)
-- **Personel maliyeti** = kişi × brüt maaş × ay × (1 + SGK işveren payı) + yan haklar.
-  2027'de çalışılan ayların ilk yarısı Ocak maaşıyla (zam veya doğrudan girilen tutar), ikinci yarısı Temmuz zamlı maaşla hesaplanır.
+- **Personel maliyeti** = Σ (o ay çalışan kişi × brüt maaş × ayın çalışılan oranı) × (1 + SGK işveren payı) + yan haklar.
+  Sezonun ilk/son ayı kısmi ise maaş çalışılan gün ÷ 30 oranında sayılır (ör. 15–31 Mayıs = 17/30).
+  2027'de Ocak–Haziran ayları Ocak maaşıyla (zam veya doğrudan girilen tutar), Temmuz–Aralık ayları Temmuz zamlı maaşla hesaplanır.
+  2027'de bir ay boş bırakılırsa 2026'daki aynı ayın kişi sayısı kullanılır.
 - **Doluluğa bağlı personel**: işaretlenen satırlarda 2027 kişi sayısı boşsa satılan oda artışı oranında önerilir.
 - **Gider tipleri**
   - *Sabit*: 2026 tutar × (1 + zam) — kira, sigorta

@@ -224,3 +224,10 @@ table.gider-tablo { table-layout: fixed; min-width: 1050px; }
 .sonraki { display: flex; justify-content: flex-end; margin: 4px 0 24px; }
 .baslarken ol { margin: 0 0 16px; padding-left: 20px; line-height: 1.8; }
 @media print { .sonraki { display: none; } }
+
+input.ay-girdi { width: 56px; padding: 4px 4px; }
+input.doldur { border-style: dashed; }
+input[type="date"] { background: var(--girdi-zemin); border: 1px solid var(--cizgi); border-radius: 5px; padding: 4px 6px; }
+.personel-tablo th, .personel-tablo td { padding-left: 4px; padding-right: 4px; }
+.personel-tablo input[type="text"] { width: 140px; }
+.aylik-ozet td .yil { display: block; font-size: 11px; color: var(--metin-3); }
