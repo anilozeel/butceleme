@@ -4,9 +4,9 @@ import {
 
 let veri = bosVeri();
 let sonuc = hesapla(veri);
-let aktifSekme = 'ozet';
+let aktifSekme = null;
 try {
-  aktifSekme = localStorage.getItem('aktifSekme') || 'ozet';
+  aktifSekme = localStorage.getItem('aktifSekme');
 } catch { /* depolama kapalı olabilir */ }
 
 // ---------------- Biçimlendirme ----------------
@@ -71,7 +71,7 @@ function secim(yol, secenekler, o = {}) {
 }
 function kutu(yol, o = {}) {
   const deger = yolOku(veri, yol);
-  return `<input type="checkbox" data-yol="${esc(yol)}" data-tip="kutu" ${deger ? 'checked' : ''} aria-label="${esc(o.etiket || yol)}">`;
+  return `<input type="checkbox" data-yol="${esc(yol)}" data-tip="kutu" ${deger ? 'checked' : ''} aria-label="${esc(o.etiket || yol)}"${o.yeniden ? ' data-yeniden="1"' : ''}>`;
 }
 const cikti = (yol, bicim = 'para', cls = '') => `<td class="cikti ${cls}" data-cikti="${yol}" data-bicim="${bicim}"></td>`;
 const fnAlan = (ad, etiket = 'div', cls = '') => `<${etiket} class="${cls}" data-fn="${ad}"></${etiket}>`;
@@ -172,141 +172,270 @@ const FN = {
 };
 
 // ---------------- Sekmeler ----------------
+// Akış: 1) 2026'da gerçekleşeni gir → 2) 2027 için karar ver → 3) sonucu gör.
+const SIRA = [
+  { id: 'v26-odalar', grup: '1 · 2026 Verileri', ad: 'Odalar & Gelirler' },
+  { id: 'v26-personel', grup: '1 · 2026 Verileri', ad: 'Personel' },
+  { id: 'v26-giderler', grup: '1 · 2026 Verileri', ad: 'Giderler' },
+  { id: 'k27-genel', grup: '2 · 2027 Kararları', ad: 'Genel Zamlar' },
+  { id: 'k27-odalar', grup: '2 · 2027 Kararları', ad: 'Oda Fiyatı & Doluluk' },
+  { id: 'k27-personel', grup: '2 · 2027 Kararları', ad: 'Personel & Maaş' },
+  { id: 'k27-giderler', grup: '2 · 2027 Kararları', ad: 'Gider Zamları' },
+  { id: 'ozet', grup: '3 · Sonuç', ad: 'Özet' },
+  { id: 'hedef', grup: '3 · Sonuç', ad: 'Fiyat Hedefi & Senaryo' },
+];
+
+const ro = (icerik, cls = '') => `<td class="salt ${cls}">${icerik}</td>`;
+const roPara = (x) => ro(gecerli(Number(x)) && x !== '' ? para(Number(x)) : '—');
+const roYz = (x) => ro(x === '' || x == null ? '—' : `%${nf1.format(Number(x))}`);
+const roAd = (x, yedek) => ro(esc(x || yedek), 'sol');
+const alan = (etiket, girdi, ipucu = '') =>
+  `<div class="alan"><label>${etiket}</label>${girdi}${ipucu ? `<p class="ipucu">${ipucu}</p>` : ''}</div>`;
+const zamPh = (x) => `%${x === '' || x == null ? 0 : x}`;
+const TIP_KISA = { sabit: 'Sabit', degisken: 'Değişken', gelirYuzdesi: 'Gelirin %\'si' };
+
+function giderKategorileri() {
+  const kategoriler = [...KATEGORILER];
+  veri.giderler.forEach((g) => { if (g.kategori && !kategoriler.includes(g.kategori)) kategoriler.push(g.kategori); });
+  return kategoriler;
+}
+
 const SEKMELER = {
-  ozet: () => `${fnAlan('ozet')}`,
-
-  varsayimlar: () => {
-    const v = 'varsayimlar';
-    const alan = (etiket, girdi, ipucu = '') =>
-      `<div class="alan"><label>${etiket}</label>${girdi}${ipucu ? `<p class="ipucu">${ipucu}</p>` : ''}</div>`;
-    const enf = veri.varsayimlar.enflasyon;
-    return `
-    <section class="kart">
-      <h2>Otel Bilgileri</h2>
-      <p class="aciklama">Sezonluk çalışan oteller açık gün sayısını 365'ten düşük girebilir.</p>
-      <div class="form-izgara">
-        ${alan('Otel adı', metinGirdi('otel.ad', { cls: 'uzun' }))}
-        ${alan('Para birimi', metinGirdi('otel.paraBirimi', { cls: 'kisa' }))}
-        ${alan('2026 açık gün sayısı', sayiGirdi('otel.acikGun2026', { min: 0, max: 366 }))}
-        ${alan('2027 açık gün sayısı', sayiGirdi('otel.acikGun2027', { min: 0, max: 366, ph: 'Boş = 2026 ile aynı' }))}
-      </div>
-    </section>
-    <section class="kart">
-      <h2>2027 Genel Zam Öngörüleri</h2>
-      <p class="aciklama">Satırlarda ayrıca bir oran girilmezse bu varsayılanlar kullanılır. Tüm oranlar yüzde (%) olarak girilir.</p>
-      <div class="form-izgara">
-        ${alan('Genel enflasyon beklentisi (%)', sayiGirdi(`${v}.enflasyon`), 'Kategorisine özel zam girilmeyen giderler ve yan haklar için.')}
-        ${alan('Oda fiyatı zammı (%)', sayiGirdi(`${v}.odaFiyatZam`), 'Oda tipinde ayrı zam girilmezse kullanılır.')}
-        ${alan('Maaş zammı – Ocak (%)', sayiGirdi(`${v}.ocakZam`), 'Yılın ilk yarısı için.')}
-        ${alan('Maaş zammı – Temmuz (%)', sayiGirdi(`${v}.temmuzZam`), 'Ocak zammının üzerine, yılın ikinci yarısı için.')}
-        ${alan('SGK işveren payı (%)', sayiGirdi(`${v}.sgkIsveren`), 'İşveren SGK + işsizlik primi. Teşvik varsa düşük girin.')}
-        ${alan('Kurumlar vergisi (%)', sayiGirdi(`${v}.kurumlarVergisi`))}
-        ${alan('Hedef kâr marjı (%)', sayiGirdi(`${v}.hedefKarMarji`), 'Fiyat Hedefi sekmesinde kullanılır.')}
-      </div>
-    </section>
-    <section class="kart">
-      <h2>Gider Kategorilerine Göre 2027 Zamları</h2>
-      <p class="aciklama">Kira, elektrik, vergi gibi kalemler için beklediğiniz artışı girin. Boş bırakılanlar genel enflasyonu (%${esc(enf)}) kullanır.</p>
-      <div class="form-izgara">
-        ${KATEGORILER.map((k) => alan(`${esc(k)} (%)`, sayiGirdi(`${v}.kategoriZam.${k}`, { ph: `Enflasyon (%${enf})`, phEnf: true }))).join('')}
-      </div>
-    </section>`;
-  },
-
-  odalar: () => {
-    const v = veri.varsayimlar;
+  // ======================= 1 · 2026 VERİLERİ =======================
+  'v26-odalar': () => {
     const satirlar = veri.odalar.map((o, i) => `<tr>
       <td class="sol girdi">${metinGirdi(`odalar.${i}.ad`, { ph: 'Oda tipi', etiket: 'Oda tipi' })}</td>
       <td class="girdi">${sayiGirdi(`odalar.${i}.adet`, { cls: 'kisa', min: 0, etiket: 'Oda adedi' })}</td>
-      <td class="girdi">${sayiGirdi(`odalar.${i}.fiyat2026`, { min: 0, etiket: '2026 fiyat' })}</td>
+      <td class="girdi">${sayiGirdi(`odalar.${i}.fiyat2026`, { min: 0, etiket: '2026 ortalama fiyat' })}</td>
       <td class="girdi">${sayiGirdi(`odalar.${i}.doluluk2026`, { cls: 'kisa', min: 0, max: 100, etiket: '2026 doluluk' })}</td>
-      <td class="girdi">${sayiGirdi(`odalar.${i}.fiyatZam`, { cls: 'kisa', ph: `%${v.odaFiyatZam ?? 0}`, etiket: 'Fiyat zammı' })}</td>
-      ${cikti(`odalar.${i}.fiyat27`)}
-      <td class="girdi">${sayiGirdi(`odalar.${i}.doluluk2027`, { cls: 'kisa', min: 0, max: 100, ph: String(o.doluluk2026 ?? ''), etiket: '2027 doluluk' })}</td>
-      ${cikti(`odalar.${i}.satilan26`, 'sayi0')}${cikti(`odalar.${i}.satilan27`, 'sayi0')}
-      ${cikti(`odalar.${i}.gelir26`)}${cikti(`odalar.${i}.gelir27`)}
+      ${cikti(`odalar.${i}.satilan26`, 'sayi0')}${cikti(`odalar.${i}.gelir26`)}
       <td>${silDugme('odalar', i)}</td></tr>`).join('');
-
     const gelirSatirlari = veri.digerGelirler.map((g, i) => `<tr>
       <td class="sol girdi">${metinGirdi(`digerGelirler.${i}.ad`, { cls: 'uzun', ph: 'Gelir kalemi', etiket: 'Gelir kalemi' })}</td>
       <td class="girdi">${sayiGirdi(`digerGelirler.${i}.tutar2026`, { min: 0, etiket: '2026 tutar' })}</td>
       <td class="sol girdi">${secim(`digerGelirler.${i}.tip`, { sabit: 'Sabit', degisken: 'Dolulukla değişir' }, { etiket: 'Tip' })}</td>
-      <td class="girdi">${sayiGirdi(`digerGelirler.${i}.artis`, { cls: 'kisa', ph: `%${v.enflasyon ?? 0}`, etiket: 'Fiyat artışı' })}</td>
-      ${cikti(`digerGelirler.${i}.tutar27`)}
       <td>${silDugme('digerGelirler', i)}</td></tr>`).join('');
-
     return `
     <section class="kart">
-      <h2>Oda Tipleri ve Fiyatlar</h2>
-      <p class="aciklama">2026 ortalama satış fiyatını (gecelik, KDV hariç) ve doluluğu girin; 2027 için zam ve hedef doluluğu belirleyin.
-        Boş bırakılan alanlarda gri yazılı varsayılan kullanılır.</p>
+      <h2>Otel Bilgileri</h2>
+      <div class="form-izgara">
+        ${alan('Otel adı', metinGirdi('otel.ad', { cls: 'uzun' }))}
+        ${alan('Para birimi', metinGirdi('otel.paraBirimi', { cls: 'kisa' }))}
+        ${alan('2026 açık gün sayısı', sayiGirdi('otel.acikGun2026', { min: 0, max: 366 }), 'Yıl boyu açıksa 365. Sezonluk otellerde açık kalınan gün.')}
+      </div>
+    </section>
+    <section class="kart">
+      <h2>2026 Oda Satışları</h2>
+      <p class="aciklama">Her oda tipi için 2026 yılında gerçekleşen (veya yıl sonu tahmini) ortalama gecelik satış fiyatını (KDV hariç) ve doluluğu girin.</p>
       <div class="kaydir"><table class="tablo">
-        <thead><tr>
-          <th class="sol">Oda Tipi</th><th>Adet</th><th>Ort. Fiyat<span class="yil">2026</span></th><th>Doluluk %<span class="yil">2026</span></th>
-          <th>Fiyat Zammı %<span class="yil">2027</span></th><th>Ort. Fiyat<span class="yil">2027</span></th><th>Doluluk %<span class="yil">2027</span></th>
-          <th>Satılan Oda<span class="yil">2026</span></th><th>Satılan Oda<span class="yil">2027</span></th>
-          <th>Oda Geliri<span class="yil">2026</span></th><th>Oda Geliri<span class="yil">2027</span></th><th></th>
-        </tr></thead>
-        <tbody>${satirlar || '<tr><td class="sol bos" colspan="12">Henüz oda tipi yok.</td></tr>'}
-          <tr class="toplam"><td class="sol">Toplam</td>${cikti('oda.adet', 'sayi0')}${cikti('oda.adr26')}
-            ${cikti('oda.doluluk26', 'yuzde')}<td></td>${cikti('oda.adr27')}${cikti('oda.doluluk27', 'yuzde')}
-            ${cikti('oda.satilan26', 'sayi0')}${cikti('oda.satilan27', 'sayi0')}${cikti('oda.gelir26')}${cikti('oda.gelir27')}<td></td></tr>
+        <thead><tr><th class="sol">Oda Tipi</th><th>Oda Adedi</th><th>Ort. Satış Fiyatı<span class="yil">2026</span></th>
+          <th>Doluluk %<span class="yil">2026</span></th><th>Satılan Oda-Gece<span class="yil">2026</span></th><th>Oda Geliri<span class="yil">2026</span></th><th></th></tr></thead>
+        <tbody>${satirlar || '<tr><td class="sol bos" colspan="7">Henüz oda tipi yok. Aşağıdan ekleyin.</td></tr>'}
+          <tr class="toplam"><td class="sol">Toplam</td>${cikti('oda.adet', 'sayi0')}${cikti('oda.adr26')}${cikti('oda.doluluk26', 'yuzde')}
+            ${cikti('oda.satilan26', 'sayi0')}${cikti('oda.gelir26')}<td></td></tr>
         </tbody>
       </table></div>
       <button type="button" class="ekle" data-ekle="odalar">+ Oda tipi ekle</button>
-      <p class="ipucu">RevPAR (müsait oda başına gelir): 2026 <span data-cikti="oda.revpar26" data-bicim="para"></span> → 2027 <span data-cikti="oda.revpar27" data-bicim="para"></span></p>
     </section>
     <section class="kart">
-      <h2>Diğer Gelirler</h2>
-      <p class="aciklama">Yiyecek-içecek, SPA, toplantı gibi oda dışı gelirler. "Dolulukla değişir" seçilen kalemler satılan oda sayısıyla orantılı büyür.</p>
+      <h2>2026 Diğer Gelirler</h2>
+      <p class="aciklama">Yiyecek-içecek, SPA, toplantı gibi oda dışı gelirlerin 2026 yıllık tutarı.
+        "Dolulukla değişir" seçilenler 2027'de satılan oda sayısıyla orantılı değişir.</p>
       <div class="kaydir"><table class="tablo">
-        <thead><tr><th class="sol">Gelir Kalemi</th><th>Tutar<span class="yil">2026</span></th><th class="sol">Tip</th>
-          <th>Fiyat Artışı %<span class="yil">2027</span></th><th>Tutar<span class="yil">2027</span></th><th></th></tr></thead>
-        <tbody>${gelirSatirlari || '<tr><td class="sol bos" colspan="6">Henüz gelir kalemi yok.</td></tr>'}
-          <tr class="toplam"><td class="sol">Toplam</td>${cikti('digerGelir26')}<td></td><td></td>${cikti('digerGelir27')}<td></td></tr>
+        <thead><tr><th class="sol">Gelir Kalemi</th><th>Yıllık Tutar<span class="yil">2026</span></th><th class="sol">Nasıl değişir?</th><th></th></tr></thead>
+        <tbody>${gelirSatirlari || '<tr><td class="sol bos" colspan="4">Henüz gelir kalemi yok.</td></tr>'}
+          <tr class="toplam"><td class="sol">Toplam</td>${cikti('digerGelir26')}<td></td><td></td></tr>
         </tbody>
       </table></div>
       <button type="button" class="ekle" data-ekle="digerGelirler">+ Gelir kalemi ekle</button>
     </section>`;
   },
 
-  personel: () => {
-    const v = veri.varsayimlar;
+  'v26-personel': () => {
     const satirlar = veri.personel.map((p, i) => `<tr>
       <td class="sol girdi">${metinGirdi(`personel.${i}.departman`, { ph: 'Departman', etiket: 'Departman' })}</td>
       <td class="sol girdi">${metinGirdi(`personel.${i}.pozisyon`, { ph: 'Pozisyon', etiket: 'Pozisyon' })}</td>
       <td class="girdi">${sayiGirdi(`personel.${i}.kisi2026`, { cls: 'kisa', min: 0, etiket: '2026 kişi' })}</td>
-      <td class="girdi">${sayiGirdi(`personel.${i}.kisi2027`, { cls: 'kisa', min: 0, ph: String(sonuc.personel[i]?.onerilenKisi27 ?? ''), etiket: '2027 kişi' })}</td>
-      <td class="girdi" style="text-align:center">${kutu(`personel.${i}.dolulugaBagli`, { etiket: 'Doluluğa bağlı' })}</td>
       <td class="girdi">${sayiGirdi(`personel.${i}.maas2026`, { min: 0, etiket: 'Güncel brüt maaş' })}</td>
       <td class="girdi">${sayiGirdi(`personel.${i}.yanHak`, { min: 0, ph: '0', etiket: 'Aylık yan hak' })}</td>
       <td class="girdi">${sayiGirdi(`personel.${i}.ay`, { cls: 'kisa', min: 0, max: 12, ph: '12', etiket: 'Çalışma ayı' })}</td>
-      <td class="girdi">${sayiGirdi(`personel.${i}.ocakZam`, { cls: 'kisa', ph: `%${v.ocakZam ?? 0}`, etiket: 'Ocak zammı' })}</td>
-      <td class="girdi">${sayiGirdi(`personel.${i}.temmuzZam`, { cls: 'kisa', ph: `%${v.temmuzZam ?? 0}`, etiket: 'Temmuz zammı' })}</td>
-      ${cikti(`personel.${i}.kisi27`, 'sayi0')}
+      ${cikti(`personel.${i}.maliyet26`)}
+      <td>${silDugme('personel', i)}</td></tr>`).join('');
+    return `
+    <section class="kart">
+      <h2>2026 Personel ve Maaşlar</h2>
+      <p class="aciklama">Her pozisyon için bugünkü kişi sayısını ve güncel <strong>brüt</strong> aylık maaşı girin.
+        Yemek, servis, lojman gibi yan hakları kişi başı aylık tutar olarak yazın. Sezonluk personelde yılda kaç ay çalıştığını girin.</p>
+      <div class="form-izgara" style="margin-bottom:12px">
+        ${alan('SGK işveren payı (%)', sayiGirdi('varsayimlar.sgkIsveren'), 'İşveren SGK + işsizlik primi; teşvikten yararlanıyorsanız indirimli oranı girin. Bordronuzla kontrol edin.')}
+      </div>
+      <div class="kaydir"><table class="tablo">
+        <thead><tr><th class="sol">Departman</th><th class="sol">Pozisyon</th><th>Kişi Sayısı<span class="yil">2026</span></th>
+          <th>Brüt Maaş<span class="yil">güncel / ay</span></th><th>Yan Hak<span class="yil">kişi / ay</span></th><th>Çalışma<span class="yil">ay / yıl</span></th>
+          <th>Yıllık Maliyet<span class="yil">2026</span></th><th></th></tr></thead>
+        <tbody>${satirlar || '<tr><td class="sol bos" colspan="8">Henüz personel yok. Aşağıdan ekleyin.</td></tr>'}
+          <tr class="toplam"><td class="sol" colspan="2">Toplam</td>${cikti('personelOzet.kisi26', 'sayi0')}<td colspan="3"></td>
+            ${cikti('personelOzet.maliyet26')}<td></td></tr>
+        </tbody>
+      </table></div>
+      <button type="button" class="ekle" data-ekle="personel">+ Personel satırı ekle</button>
+      <p class="ipucu">Yıllık maliyet = kişi × brüt maaş × ay × (1 + SGK işveren payı) + yan haklar. Güncel maaşla 12 ay üzerinden hesaplanır.</p>
+    </section>`;
+  },
+
+  'v26-giderler': () => {
+    const kategoriler = giderKategorileri();
+    const katSecenek = Object.fromEntries(kategoriler.map((k) => [k, k]));
+    const gruplar = kategoriler.map((kat) => {
+      const idxler = veri.giderler.map((g, i) => (g.kategori === kat ? i : -1)).filter((i) => i >= 0);
+      const satirlar = idxler.map((i) => {
+        const g = veri.giderler[i];
+        const tutar = g.tip === 'gelirYuzdesi'
+          ? `<td class="girdi">${sayiGirdi(`giderler.${i}.oran`, { cls: 'kisa', etiket: 'Oran' })} %
+             ${secim(`giderler.${i}.baz`, { oda: 'oda gelirinin', toplam: 'toplam gelirin' }, { etiket: 'Baz' })}</td>`
+          : `<td class="girdi">${sayiGirdi(`giderler.${i}.tutar2026`, { min: 0, etiket: '2026 yıllık tutar' })}</td>`;
+        return `<tr>
+          <td class="sol girdi">${metinGirdi(`giderler.${i}.ad`, { ph: 'Gider kalemi', etiket: 'Gider kalemi' })}</td>
+          <td class="sol girdi">${secim(`giderler.${i}.tip`, GIDER_TIPLERI, { yeniden: true, etiket: 'Gider tipi' })}</td>
+          ${tutar}
+          ${cikti(`giderler.${i}.tutar26`)}
+          <td class="sol girdi">${secim(`giderler.${i}.kategori`, katSecenek, { yeniden: true, etiket: 'Kategori' })}</td>
+          <td>${silDugme('giderler', i)}</td></tr>`;
+      }).join('');
+      return `<div class="gider-grup">
+        <div class="gider-grup-baslik"><h3>${esc(kat)}</h3></div>
+        ${idxler.length ? `<div class="kaydir"><table class="tablo gider-tablo"><colgroup>
+          <col style="width:26%"><col style="width:20%"><col style="width:22%"><col style="width:13%"><col style="width:16%"><col style="width:40px"></colgroup>
+          <thead><tr><th class="sol">Gider Kalemi</th><th class="sol">Nasıl oluşur?</th><th>Yıllık Tutar / Oran<span class="yil">2026</span></th>
+          <th>Tutar<span class="yil">2026</span></th><th class="sol">Kategori</th><th></th></tr></thead><tbody>${satirlar}</tbody></table></div>`
+          : '<p class="bos">Bu kategoride kalem yok.</p>'}
+        <button type="button" class="ekle" data-ekle="giderler" data-kategori="${esc(kat)}">+ ${esc(kat)} kalemi ekle</button>
+      </div>`;
+    }).join('');
+    return `
+    <section class="kart">
+      <h2>2026 Giderler (personel hariç)</h2>
+      <p class="aciklama">2026 yılı gerçekleşen (veya yıl sonu tahmini) yıllık tutarları girin. "Nasıl oluşur?" seçimi 2027 hesabını belirler:
+        <strong>Sabit</strong> (kira, sigorta) · <strong>Değişken</strong> – dolulukla artar (elektrik, su, yiyecek maliyeti) ·
+        <strong>Gelirin yüzdesi</strong> (konaklama vergisi, acente komisyonu).</p>
+      ${gruplar}
+      <table class="tablo" style="margin-top:16px"><tbody>
+        <tr class="toplam"><td class="sol">Toplam Gider 2026 (personel hariç)</td><td><span data-cikti="gider26" data-bicim="para"></span></td></tr>
+      </tbody></table>
+    </section>`;
+  },
+
+  // ======================= 2 · 2027 KARARLARI =======================
+  'k27-genel': () => {
+    const v = 'varsayimlar';
+    const enf = veri.varsayimlar.enflasyon;
+    return `
+    <section class="kart">
+      <h2>2027 Genel Zam Kararları</h2>
+      <p class="aciklama">2027'de beklediğiniz / uygulayacağınız zamlar. Bunlar varsayılan oranlardır; sonraki sekmelerde oda tipi,
+        pozisyon veya gider kalemi bazında farklı oran girebilirsiniz. Boş bırakılan oran %0 kabul edilir.</p>
+      <div class="form-izgara">
+        ${alan('Genel enflasyon beklentisi (%)', sayiGirdi(`${v}.enflasyon`, { ph: '%0' }), 'Kategori zammı girilmeyen giderler, diğer gelirler ve yan haklar için.')}
+        ${alan('Oda fiyatı zammı (%)', sayiGirdi(`${v}.odaFiyatZam`, { ph: '%0' }), '2026 ortalama fiyatına göre.')}
+        ${alan('Maaş zammı – Ocak 2027 (%)', sayiGirdi(`${v}.ocakZam`, { ph: '%0' }), 'Güncel maaşa göre.')}
+        ${alan('Maaş zammı – Temmuz 2027 (%)', sayiGirdi(`${v}.temmuzZam`, { ph: '%0' }), 'Ocak zamlı maaşın üzerine.')}
+        ${alan('2027 açık gün sayısı', sayiGirdi('otel.acikGun2027', { min: 0, max: 366, ph: `2026 ile aynı (${veri.otel.acikGun2026 ?? 365})` }))}
+        ${alan('Kurumlar vergisi (%)', sayiGirdi(`${v}.kurumlarVergisi`))}
+      </div>
+    </section>
+    <section class="kart">
+      <h2>Gider Kategorilerine Göre 2027 Zamları</h2>
+      <p class="aciklama">Kira, elektrik, vergi gibi kalemler için beklediğiniz artış. Boş bırakılanlar genel enflasyonu kullanır.</p>
+      <div class="form-izgara">
+        ${KATEGORILER.map((k) => alan(`${esc(k)} (%)`, sayiGirdi(`${v}.kategoriZam.${k}`, { ph: `Enflasyon (${zamPh(enf)})`, phEnf: true }))).join('')}
+      </div>
+    </section>`;
+  },
+
+  'k27-odalar': () => {
+    const v = veri.varsayimlar;
+    const satirlar = veri.odalar.map((o, i) => `<tr>
+      ${roAd(o.ad, `Oda tipi ${i + 1}`)}
+      ${ro(nf0.format(Number(o.adet) || 0))}
+      <td class="girdi">${sayiGirdi(`odalar.${i}.adet2027`, { cls: 'kisa', min: 0, ph: String(o.adet ?? ''), etiket: '2027 oda adedi' })}</td>
+      ${roPara(o.fiyat2026)}
+      <td class="girdi">${sayiGirdi(`odalar.${i}.fiyatZam`, { cls: 'kisa', ph: zamPh(v.odaFiyatZam), etiket: 'Fiyat zammı' })}</td>
+      ${cikti(`odalar.${i}.fiyat27`, 'para', 'vurgu')}
+      ${roYz(o.doluluk2026)}
+      <td class="girdi">${sayiGirdi(`odalar.${i}.doluluk2027`, { cls: 'kisa', min: 0, max: 100, ph: String(o.doluluk2026 ?? ''), etiket: '2027 doluluk' })}</td>
+      ${cikti(`odalar.${i}.satilan27`, 'sayi0')}${cikti(`odalar.${i}.gelir26`)}${cikti(`odalar.${i}.gelir27`)}</tr>`).join('');
+    const gelirSatirlari = veri.digerGelirler.map((g, i) => `<tr>
+      ${roAd(g.ad, `Gelir ${i + 1}`)}${roPara(g.tutar2026)}${ro(g.tip === 'degisken' ? 'Dolulukla değişir' : 'Sabit', 'sol')}
+      <td class="girdi">${sayiGirdi(`digerGelirler.${i}.artis`, { cls: 'kisa', ph: zamPh(v.enflasyon), etiket: 'Fiyat artışı' })}</td>
+      ${cikti(`digerGelirler.${i}.tutar27`)}</tr>`).join('');
+    return `
+    <section class="kart">
+      <h2>2027 Oda Fiyatı ve Doluluk Kararları</h2>
+      <p class="aciklama">Her oda tipi için 2027 fiyat zammını ve hedef doluluğu belirleyin. Boş bırakılan zam kutusu genel oda fiyatı
+        zammını (${zamPh(v.odaFiyatZam)}), boş doluluk 2026 doluluğunu kullanır. Oda sayısı değişmiyorsa "2027 adet" boş kalabilir.</p>
+      ${veri.odalar.length ? '' : '<div class="mesaj">Önce <strong>1 · 2026 Verileri → Odalar &amp; Gelirler</strong> sekmesinde oda tiplerini girin.</div>'}
+      <div class="kaydir"><table class="tablo">
+        <thead><tr><th class="sol">Oda Tipi</th><th>Adet<span class="yil">2026</span></th><th>Adet<span class="yil">2027</span></th>
+          <th>Ort. Fiyat<span class="yil">2026</span></th><th>Fiyat Zammı %<span class="yil">2027</span></th><th>Ort. Fiyat<span class="yil">2027</span></th>
+          <th>Doluluk<span class="yil">2026</span></th><th>Doluluk % Hedefi<span class="yil">2027</span></th>
+          <th>Satılan Oda-Gece<span class="yil">2027</span></th><th>Oda Geliri<span class="yil">2026</span></th><th>Oda Geliri<span class="yil">2027</span></th></tr></thead>
+        <tbody>${satirlar}
+          <tr class="toplam"><td class="sol">Toplam</td>${cikti('oda.adet', 'sayi0')}${cikti('oda.adet27', 'sayi0')}${cikti('oda.adr26')}<td></td>
+            ${cikti('oda.adr27')}${cikti('oda.doluluk26', 'yuzde')}${cikti('oda.doluluk27', 'yuzde')}${cikti('oda.satilan27', 'sayi0')}
+            ${cikti('oda.gelir26')}${cikti('oda.gelir27')}</tr>
+        </tbody>
+      </table></div>
+      <p class="ipucu">RevPAR (müsait oda başına gelir): 2026 <span data-cikti="oda.revpar26" data-bicim="para"></span> → 2027 <span data-cikti="oda.revpar27" data-bicim="para"></span>.
+        Zarar etmemek için gereken fiyatı <strong>3 · Sonuç → Fiyat Hedefi</strong> sekmesinde görebilirsiniz.</p>
+    </section>
+    ${veri.digerGelirler.length ? `<section class="kart">
+      <h2>2027 Diğer Gelirler</h2>
+      <p class="aciklama">Oda dışı gelirlerde 2027 fiyat artışı. Boş bırakılanlar genel enflasyonu (${zamPh(v.enflasyon)}) kullanır.</p>
+      <div class="kaydir"><table class="tablo">
+        <thead><tr><th class="sol">Gelir Kalemi</th><th>Tutar<span class="yil">2026</span></th><th class="sol">Nasıl değişir?</th>
+          <th>Fiyat Artışı %<span class="yil">2027</span></th><th>Tutar<span class="yil">2027</span></th></tr></thead>
+        <tbody>${gelirSatirlari}
+          <tr class="toplam"><td class="sol">Toplam</td>${cikti('digerGelir26')}<td></td><td></td>${cikti('digerGelir27')}</tr></tbody>
+      </table></div>
+    </section>` : ''}`;
+  },
+
+  'k27-personel': () => {
+    const v = veri.varsayimlar;
+    const satirlar = veri.personel.map((p, i) => `<tr>
+      <td class="sol girdi">${metinGirdi(`personel.${i}.departman`, { ph: 'Departman', etiket: 'Departman' })}</td>
+      <td class="sol girdi">${metinGirdi(`personel.${i}.pozisyon`, { ph: 'Pozisyon', etiket: 'Pozisyon' })}</td>
+      ${ro(nf0.format(Number(p.kisi2026) || 0))}
+      <td class="girdi" style="text-align:center">${kutu(`personel.${i}.dolulugaBagli`, { yeniden: true, etiket: 'Doluluğa bağlı' })}</td>
+      <td class="girdi">${sayiGirdi(`personel.${i}.kisi2027`, { cls: 'kisa', min: 0, ph: String(sonuc.personel[i]?.onerilenKisi27 ?? ''), etiket: '2027 kişi' })}</td>
+      ${roPara(p.maas2026)}
+      <td class="girdi">${sayiGirdi(`personel.${i}.ocakZam`, { cls: 'kisa', ph: zamPh(v.ocakZam), etiket: 'Ocak zammı' })}</td>
+      <td class="girdi">${sayiGirdi(`personel.${i}.maas2027`, { ph: 'veya tutar', etiket: 'Ocak 2027 brüt maaş (doğrudan)' })}</td>
+      <td class="girdi">${sayiGirdi(`personel.${i}.temmuzZam`, { cls: 'kisa', ph: zamPh(v.temmuzZam), etiket: 'Temmuz zammı' })}</td>
+      <td class="girdi">${sayiGirdi(`personel.${i}.ay2027`, { cls: 'kisa', min: 0, max: 12, ph: String(p.ay || 12), etiket: '2027 çalışma ayı' })}</td>
       ${cikti(`personel.${i}.maasOcak27`)}${cikti(`personel.${i}.maasTemmuz27`)}
       ${cikti(`personel.${i}.maliyet26`)}${cikti(`personel.${i}.maliyet27`)}
       <td>${silDugme('personel', i)}</td></tr>`).join('');
     return `
     <section class="kart">
-      <h2>Personel ve Maaşlar</h2>
-      <p class="aciklama">Güncel (2026) brüt aylık maaşı ve kişi sayısını girin. Maliyet = brüt maaş × (1 + SGK işveren payı %${esc(v.sgkIsveren)}) + yan haklar.
-        2027'de çalışılan ayların ilk yarısı Ocak zammıyla, ikinci yarısı Ocak + Temmuz zammıyla hesaplanır.</p>
+      <h2>2027 Personel ve Maaş Kararları</h2>
+      <p class="aciklama">Her pozisyon için 2027'de kaç kişi çalışacağını ve maaş zammını belirleyin. Zam kutusu boşsa genel zam
+        (Ocak ${zamPh(v.ocakZam)}, Temmuz ${zamPh(v.temmuzZam)}) uygulanır. Zam yerine Ocak 2027 brüt maaşını doğrudan da yazabilirsiniz.</p>
       <p class="aciklama">${fnAlan('kisiOneri', 'span')}</p>
       <div class="kaydir"><table class="tablo">
-        <thead><tr>
-          <th class="sol">Departman</th><th class="sol">Pozisyon</th><th>Kişi<span class="yil">2026</span></th><th>Kişi (plan)<span class="yil">2027</span></th>
-          <th>Doluluğa<span class="yil">bağlı</span></th><th>Brüt Maaş<span class="yil">güncel/ay</span></th><th>Yan Hak<span class="yil">kişi/ay</span></th>
-          <th>Çalışma<span class="yil">ay/yıl</span></th><th>Ocak<span class="yil">zam %</span></th><th>Temmuz<span class="yil">zam %</span></th>
-          <th>Kişi<span class="yil">2027</span></th><th>Brüt Maaş<span class="yil">Oca 2027</span></th><th>Brüt Maaş<span class="yil">Tem 2027</span></th>
-          <th>Yıllık Maliyet<span class="yil">2026</span></th><th>Yıllık Maliyet<span class="yil">2027</span></th><th></th>
-        </tr></thead>
-        <tbody>${satirlar || '<tr><td class="sol bos" colspan="16">Henüz personel yok.</td></tr>'}
-          <tr class="toplam"><td class="sol" colspan="2">Toplam</td>${cikti('personelOzet.kisi26', 'sayi0')}<td colspan="7"></td>
-            ${cikti('personelOzet.kisi27', 'sayi0')}<td></td><td></td>${cikti('personelOzet.maliyet26')}${cikti('personelOzet.maliyet27')}<td></td></tr>
+        <thead><tr><th class="sol">Departman</th><th class="sol">Pozisyon</th><th>Kişi<span class="yil">2026</span></th>
+          <th>Doluluğa<span class="yil">bağlı</span></th><th>Kişi Kararı<span class="yil">2027</span></th>
+          <th>Brüt Maaş<span class="yil">güncel</span></th><th>Ocak Zammı<span class="yil">%</span></th><th>veya Ocak Maaşı<span class="yil">brüt, doğrudan</span></th>
+          <th>Temmuz Zammı<span class="yil">%</span></th><th>Çalışma Ayı<span class="yil">2027</span></th>
+          <th>Brüt Maaş<span class="yil">Oca 2027</span></th><th>Brüt Maaş<span class="yil">Tem 2027</span></th>
+          <th>Yıllık Maliyet<span class="yil">2026</span></th><th>Yıllık Maliyet<span class="yil">2027</span></th><th></th></tr></thead>
+        <tbody>${satirlar || '<tr><td class="sol bos" colspan="15">Önce 2026 personelini girin.</td></tr>'}
+          <tr class="toplam"><td class="sol" colspan="2">Toplam</td>${cikti('personelOzet.kisi26', 'sayi0')}<td></td>${cikti('personelOzet.kisi27', 'sayi0')}
+            <td colspan="7"></td>${cikti('personelOzet.maliyet26')}${cikti('personelOzet.maliyet27')}<td></td></tr>
         </tbody>
       </table></div>
-      <button type="button" class="ekle" data-ekle="personel">+ Personel satırı ekle</button>
+      <button type="button" class="ekle" data-ekle="personel" data-yeni27="1">+ 2027'de yeni pozisyon ekle</button>
+      <p class="ipucu">2027'de çalışılan ayların ilk yarısı Ocak maaşıyla, ikinci yarısı Temmuz zamlı maaşla hesaplanır. Yan haklar genel enflasyon kadar artar.</p>
     </section>
     <section class="kart">
       <h2>Departman Özeti – Kaç Kişi Çalışacağız?</h2>
@@ -314,58 +443,51 @@ const SEKMELER = {
     </section>`;
   },
 
-  giderler: () => {
+  'k27-giderler': () => {
     const v = veri.varsayimlar;
-    const kategoriler = [...KATEGORILER];
-    veri.giderler.forEach((g) => { if (g.kategori && !kategoriler.includes(g.kategori)) kategoriler.push(g.kategori); });
-    const katSecenek = Object.fromEntries(kategoriler.map((k) => [k, k]));
-    const gruplar = kategoriler.map((kat) => {
+    const gruplar = giderKategorileri().map((kat) => {
       const idxler = veri.giderler.map((g, i) => (g.kategori === kat ? i : -1)).filter((i) => i >= 0);
+      if (!idxler.length) return '';
       const katZam = v.kategoriZam?.[kat];
-      const vars = katZam === '' || katZam == null ? v.enflasyon : katZam;
+      const varsayilan = katZam === '' || katZam == null ? v.enflasyon : katZam;
       const satirlar = idxler.map((i) => {
         const g = veri.giderler[i];
-        const yuzdeMi = g.tip === 'gelirYuzdesi';
-        const orta = yuzdeMi
-          ? `<td class="girdi">${sayiGirdi(`giderler.${i}.oran`, { cls: 'kisa', etiket: '2026 oran' })} %</td>
-             <td class="girdi">${sayiGirdi(`giderler.${i}.oran2027`, { cls: 'kisa', ph: String(g.oran ?? ''), etiket: '2027 oran' })} %</td>
-             <td class="sol girdi">${secim(`giderler.${i}.baz`, { oda: 'Oda gelirinin', toplam: 'Toplam gelirin' }, { etiket: 'Baz' })}</td>`
-          : `<td class="girdi">${sayiGirdi(`giderler.${i}.tutar2026`, { min: 0, etiket: '2026 tutar' })}</td>
-             <td class="girdi">${sayiGirdi(`giderler.${i}.artis`, { cls: 'kisa', ph: `%${vars ?? 0}`, etiket: '2027 zam' })}</td><td></td>`;
-        return `<tr>
-          <td class="sol girdi">${metinGirdi(`giderler.${i}.ad`, { cls: 'uzun', ph: 'Gider kalemi', etiket: 'Gider kalemi' })}</td>
-          <td class="sol girdi">${secim(`giderler.${i}.tip`, GIDER_TIPLERI, { yeniden: true, etiket: 'Gider tipi' })}</td>
-          ${orta}
+        const karar = g.tip === 'gelirYuzdesi'
+          ? `${roYz(g.oran)}<td class="girdi">${sayiGirdi(`giderler.${i}.oran2027`, { cls: 'kisa', ph: `%${g.oran ?? 0}`, etiket: '2027 oran' })} %</td><td class="salt sol">${g.baz === 'toplam' ? 'toplam gelirin' : 'oda gelirinin'}</td>`
+          : `${roPara(g.tutar2026)}<td class="girdi">${sayiGirdi(`giderler.${i}.artis`, { cls: 'kisa', ph: zamPh(varsayilan), etiket: '2027 zam' })}</td>
+             <td class="girdi">${sayiGirdi(`giderler.${i}.tutar2027`, { ph: 'veya tutar', etiket: '2027 tutar (doğrudan)' })}</td>`;
+        return `<tr><td class="sol girdi">${metinGirdi(`giderler.${i}.ad`, { ph: 'Gider kalemi', etiket: 'Gider kalemi' })}</td>${ro(TIP_KISA[g.tip] || g.tip, 'sol')}${karar}
           ${cikti(`giderler.${i}.tutar26`)}${cikti(`giderler.${i}.tutar27`)}
-          <td class="sol girdi">${secim(`giderler.${i}.kategori`, katSecenek, { yeniden: true, etiket: 'Kategori' })}</td>
-          <td>${silDugme('giderler', i)}</td></tr>`;
+          <td class="cikti" data-fn-satir="giderDegisim" data-index="${i}"></td></tr>`;
       }).join('');
       return `<div class="gider-grup">
-        <div class="gider-grup-baslik"><h3>${esc(kat)}</h3><span class="ipucu">2027 varsayılan zam: %${esc(vars ?? 0)}</span></div>
-        ${idxler.length ? `<div class="kaydir"><table class="tablo gider-tablo"><colgroup>
-          <col style="width:20%"><col style="width:17%"><col style="width:11%"><col style="width:10%"><col style="width:11%">
-          <col style="width:10%"><col style="width:10%"><col style="width:16%"><col style="width:40px"></colgroup><thead><tr>
-          <th class="sol">Gider Kalemi</th><th class="sol">Tip</th><th>Tutar / Oran<span class="yil">2026</span></th>
-          <th>Zam % / Oran<span class="yil">2027</span></th><th class="sol">Baz</th>
-          <th>Tutar<span class="yil">2026</span></th><th>Tutar<span class="yil">2027</span></th><th class="sol">Kategori</th><th></th>
-        </tr></thead><tbody>${satirlar}</tbody></table></div>` : '<p class="bos">Bu kategoride kalem yok.</p>'}
-        <button type="button" class="ekle" data-ekle="giderler" data-kategori="${esc(kat)}">+ ${esc(kat)} kalemi ekle</button>
+        <div class="gider-grup-baslik"><h3>${esc(kat)}</h3><span class="ipucu">Kategori zammı: ${zamPh(varsayilan)}</span></div>
+        <div class="kaydir"><table class="tablo gider-tablo"><colgroup>
+          <col style="width:22%"><col style="width:10%"><col style="width:13%"><col style="width:11%"><col style="width:13%">
+          <col style="width:12%"><col style="width:12%"><col style="width:9%"></colgroup>
+          <thead><tr><th class="sol">Gider Kalemi</th><th class="sol">Tip</th><th>Tutar / Oran<span class="yil">2026</span></th>
+          <th>Zam % / Oran<span class="yil">2027</span></th><th>veya Tutar<span class="yil">2027, doğrudan</span></th>
+          <th>Tutar<span class="yil">2026</span></th><th>Tutar<span class="yil">2027</span></th><th>Değişim</th></tr></thead>
+          <tbody>${satirlar}</tbody></table></div>
+        <button type="button" class="ekle" data-ekle="giderler" data-kategori="${esc(kat)}" data-yeni27="1">+ 2027'de yeni ${esc(kat)} kalemi</button>
       </div>`;
     }).join('');
     return `
     <section class="kart">
-      <h2>Giderler (Personel hariç)</h2>
-      <p class="aciklama"><strong>Sabit</strong>: yıllık tutar, zam oranı kadar artar (kira, sigorta).
-        <strong>Değişken</strong>: satılan oda sayısıyla orantılı değişir, üstüne zam eklenir (elektrik, su, yiyecek maliyeti).
-        <strong>Gelirin yüzdesi</strong>: gelire oranla hesaplanır (konaklama vergisi, acente komisyonu).
-        Zam kutusu boş bırakılırsa kategori zammı, o da yoksa genel enflasyon kullanılır.</p>
-      ${gruplar}
+      <h2>2027 Gider Kararları</h2>
+      <p class="aciklama">Her kalem için zam oranı girin veya kesinleşmiş tutarı (ör. imzalanmış kira sözleşmesi) doğrudan yazın.
+        Boş bırakılan zam, kategori zammını (<strong>Genel Zamlar</strong> sekmesi), o da yoksa genel enflasyonu kullanır.
+        Değişken giderler ayrıca satılan oda sayısındaki değişimle orantılı artar.</p>
+      ${gruplar || '<div class="mesaj">Önce <strong>1 · 2026 Verileri → Giderler</strong> sekmesinde giderleri girin.</div>'}
       <table class="tablo" style="margin-top:16px"><tbody>
         <tr class="toplam"><td class="sol">Toplam Gider (personel hariç)</td><td>2026: <span data-cikti="gider26" data-bicim="para"></span></td>
         <td>2027: <span data-cikti="gider27" data-bicim="para"></span></td></tr>
       </tbody></table>
     </section>`;
   },
+
+  // ======================= 3 · SONUÇ =======================
+  ozet: () => `${fnAlan('ozet')}`,
 
   hedef: () => `
     <section class="kart">
@@ -390,6 +512,19 @@ const SEKMELER = {
 };
 
 function ozetHtml(s) {
+  if (!veri.odalar.length && !veri.personel.length && !veri.giderler.length) {
+    return `<section class="kart baslarken">
+      <h2>Başlarken</h2>
+      <p class="aciklama">Bütçe üç adımda hazırlanır:</p>
+      <ol>
+        <li><strong>2026 Verileri:</strong> Oda tiplerini, fiyat ve doluluğu, personel ve maaşları, giderleri 2026'da gerçekleştiği gibi girin.</li>
+        <li><strong>2027 Kararları:</strong> Oda fiyatı zammı, hedef doluluk, kaç kişi çalışacağı, maaş zamları, kira/elektrik/vergi zamlarını belirleyin.</li>
+        <li><strong>Sonuç:</strong> 2027 gelir-gider tablosunu, kârı ve odayı en az kaçtan satmanız gerektiğini görün.</li>
+      </ol>
+      <button type="button" class="birincil" data-sekme="v26-odalar">2026 verilerini girmeye başla →</button>
+      <p class="ipucu">Nasıl göründüğünü merak ediyorsanız sağ üstteki <strong>Diğer → Örnek veriyi yükle</strong> ile deneme verisi yükleyebilirsiniz.</p>
+    </section>`;
+  }
   const satir = (ad, a, b, cls = '') => `<tr class="${cls}"><td class="sol">${ad}</td><td>${para(a)}</td><td>${para(b)}</td>
     <td>${degisim(a, b)}</td><td>${yz(s.gelir27 ? b / s.gelir27 : null)}</td></tr>`;
   const digerSatirlar = veri.digerGelirler.map((g, i) => satir(`&nbsp;&nbsp;${esc(g.ad || 'Diğer gelir')}`, s.digerGelirler[i].tutar26, s.digerGelirler[i].tutar27)).join('');
@@ -446,7 +581,7 @@ function ozetHtml(s) {
         <div class="kaydir"><table class="tablo">
           <thead><tr><th class="sol">Gösterge</th><th>2026</th><th>2027</th><th>Değişim</th></tr></thead>
           <tbody>
-            <tr><td class="sol">Oda sayısı</td><td>${nf0.format(s.oda.adet)}</td><td>${nf0.format(s.oda.adet)}</td><td></td></tr>
+            <tr><td class="sol">Oda sayısı</td><td>${nf0.format(s.oda.adet)}</td><td>${nf0.format(s.oda.adet27)}</td><td></td></tr>
             <tr><td class="sol">Doluluk</td><td>${yz(s.oda.doluluk26)}</td><td>${yz(s.oda.doluluk27)}</td><td>${nf1.format((s.oda.doluluk27 - s.oda.doluluk26) * 100)} puan</td></tr>
             <tr><td class="sol">Ort. oda fiyatı (ADR)</td><td>${para(s.oda.adr26)}</td><td>${para(s.oda.adr27)}</td><td>${degisim(s.oda.adr26, s.oda.adr27)}</td></tr>
             <tr><td class="sol">RevPAR</td><td>${para(s.oda.revpar26)}</td><td>${para(s.oda.revpar27)}</td><td>${degisim(s.oda.revpar26, s.oda.revpar27)}</td></tr>
@@ -468,10 +603,24 @@ function ozetHtml(s) {
 // ---------------- Çizim ----------------
 const $icerik = document.getElementById('icerik');
 
+function menuCiz() {
+  const gruplar = [...new Set(SIRA.map((x) => x.grup))];
+  document.getElementById('sekmeler').innerHTML = gruplar.map((g) => `<div class="sekme-grup">
+      <span class="grup-ad">${esc(g)}</span>
+      <div class="grup-dugmeler">${SIRA.filter((x) => x.grup === g).map((x) =>
+        `<button type="button" role="tab" data-sekme="${x.id}" aria-selected="${x.id === aktifSekme}">${esc(x.ad)}</button>`).join('')}</div>
+    </div>`).join('');
+}
+
 function sekmeCiz() {
-  document.querySelectorAll('[data-sekme]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.sekme === aktifSekme)));
+  if (!SEKMELER[aktifSekme]) aktifSekme = veri.odalar.length ? 'ozet' : 'v26-odalar';
+  menuCiz();
   sonuc = hesapla(veri);
-  $icerik.innerHTML = (SEKMELER[aktifSekme] || SEKMELER.ozet)();
+  const sira = SIRA.findIndex((x) => x.id === aktifSekme);
+  const sonraki = SIRA[sira + 1];
+  $icerik.innerHTML = SEKMELER[aktifSekme]() + (sonraki
+    ? `<div class="sonraki"><button type="button" class="birincil" data-sekme="${sonraki.id}">Sonraki adım: ${esc(sonraki.grup.split('·')[1].trim())} → ${esc(sonraki.ad)}</button></div>`
+    : '');
   ciktilariYaz();
 }
 
@@ -488,6 +637,10 @@ function ciktilariYaz() {
   });
   document.querySelectorAll('[data-fn]').forEach((el) => {
     el.innerHTML = FN[el.dataset.fn](sonuc);
+  });
+  document.querySelectorAll('[data-fn-satir="giderDegisim"]').forEach((el) => {
+    const g = sonuc.giderler[Number(el.dataset.index)];
+    el.innerHTML = g ? degisim(g.tutar26, g.tutar27) : '';
   });
 }
 
@@ -554,10 +707,10 @@ document.addEventListener('change', (e) => {
 });
 
 const YENI_SATIR = {
-  odalar: () => ({ id: yeniId(), ad: '', adet: 0, fiyat2026: 0, doluluk2026: 0, fiyatZam: '', doluluk2027: '' }),
+  odalar: () => ({ id: yeniId(), ad: '', adet: 0, fiyat2026: 0, doluluk2026: 0, adet2027: '', fiyatZam: '', doluluk2027: '' }),
   digerGelirler: () => ({ id: yeniId(), ad: '', tutar2026: 0, tip: 'sabit', artis: '' }),
-  personel: () => ({ id: yeniId(), departman: '', pozisyon: '', kisi2026: 1, kisi2027: '', maas2026: 0, ay: 12, yanHak: '', dolulugaBagli: false }),
-  giderler: (kategori) => ({ id: yeniId(), kategori: kategori || 'Diğer Giderler', ad: '', tip: 'sabit', tutar2026: 0, artis: '', baz: 'oda', oran: 0, oran2027: '' }),
+  personel: () => ({ id: yeniId(), departman: '', pozisyon: '', kisi2026: 1, kisi2027: '', maas2026: 0, ay: 12, yanHak: '', dolulugaBagli: false, ocakZam: '', maas2027: '', temmuzZam: '', ay2027: '' }),
+  giderler: (kategori) => ({ id: yeniId(), kategori: kategori || 'Diğer Giderler', ad: '', tip: 'sabit', tutar2026: 0, artis: '', tutar2027: '', baz: 'oda', oran: 0, oran2027: '' }),
 };
 
 document.addEventListener('click', async (e) => {
@@ -566,12 +719,15 @@ document.addEventListener('click', async (e) => {
     aktifSekme = sekme.dataset.sekme;
     try { localStorage.setItem('aktifSekme', aktifSekme); } catch { /* yok say */ }
     sekmeCiz();
+    window.scrollTo({ top: 0 });
     return;
   }
   const ekle = e.target.closest('[data-ekle]');
   if (ekle) {
     const liste = ekle.dataset.ekle;
-    veri[liste].push(YENI_SATIR[liste](ekle.dataset.kategori));
+    const satir = YENI_SATIR[liste](ekle.dataset.kategori);
+    if (ekle.dataset.yeni27 && liste === 'personel') Object.assign(satir, { kisi2026: 0, kisi2027: 1 });
+    veri[liste].push(satir);
     sekmeCiz();
     kaydetPlanla();
     const son = [...document.querySelectorAll(`[data-yol^="${liste}.${veri[liste].length - 1}."]`)].find((x) => x.type === 'text');

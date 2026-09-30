@@ -51,8 +51,9 @@ export function hesaplaTemel(veri, senaryo = {}) {
   // ---- Oda gelirleri ----
   const odalar = (veri.odalar || []).map((o) => {
     const adet = sayi(o.adet);
+    const adet27 = ya(o.adet2027, o.adet);
     const kapasite26 = adet * gun26;
-    const kapasite27 = adet * gun27;
+    const kapasite27 = adet27 * gun27;
     const doluluk26 = sinirla(yuzde(o.doluluk2026));
     const doluluk27 = sinirla(
       yuzde(ya(o.doluluk2027, o.doluluk2026)) * dolulukCarpan + dolulukPuan / 100
@@ -63,7 +64,7 @@ export function hesaplaTemel(veri, senaryo = {}) {
     const fiyat26 = sayi(o.fiyat2026);
     const fiyat27 = fiyat26 * (1 + zam / 100) * fiyatCarpan;
     return {
-      adet, zam, fiyat26, fiyat27, doluluk26, doluluk27,
+      adet, adet27, zam, fiyat26, fiyat27, doluluk26, doluluk27,
       kapasite26, kapasite27, satilan26, satilan27,
       gelir26: satilan26 * fiyat26,
       gelir27: satilan27 * fiyat27,
@@ -73,6 +74,7 @@ export function hesaplaTemel(veri, senaryo = {}) {
   const topla = (dizi, alan) => dizi.reduce((t, x) => t + (x[alan] || 0), 0);
   const oda = {
     adet: topla(odalar, 'adet'),
+    adet27: topla(odalar, 'adet27'),
     kapasite26: topla(odalar, 'kapasite26'),
     kapasite27: topla(odalar, 'kapasite27'),
     satilan26: topla(odalar, 'satilan26'),
@@ -109,13 +111,17 @@ export function hesaplaTemel(veri, senaryo = {}) {
     const onerilenKisi27 = p.dolulugaBagli ? Math.round(kisi26 * hacimOrani) : kisi26;
     const kisi27 = ya(p.kisi2027, onerilenKisi27);
     const ay = sinirla(ya(p.ay, 12), 0, 12);
+    const ay27 = sinirla(ya(p.ay2027, ay), 0, 12);
     const maas26 = sayi(p.maas2026);
-    const ocakZam = ya(p.ocakZam, v.ocakZam);
     const temmuzZam = ya(p.temmuzZam, v.temmuzZam);
+    // Ocak 2027 maaşı doğrudan girilmişse o, yoksa güncel maaş + Ocak zammı.
+    const maasOcak27 = bos(p.maas2027)
+      ? maas26 * (1 + ya(p.ocakZam, v.ocakZam) / 100)
+      : sayi(p.maas2027);
+    const ocakZam = maas26 ? (maasOcak27 / maas26 - 1) * 100 : 0;
     // Çalışılan ayların yarısı Ocak zammıyla, kalanı Temmuz zammıyla ödenir.
-    const ayIlkYari = Math.floor(ay / 2);
-    const ayIkinciYari = ay - ayIlkYari;
-    const maasOcak27 = maas26 * (1 + ocakZam / 100);
+    const ayIlkYari = Math.floor(ay27 / 2);
+    const ayIkinciYari = ay27 - ayIlkYari;
     const maasTemmuz27 = maasOcak27 * (1 + temmuzZam / 100);
     const yanHak26 = sayi(p.yanHak);
     const yanHak27 = yanHak26 * (1 + enflasyon / 100);
@@ -123,11 +129,11 @@ export function hesaplaTemel(veri, senaryo = {}) {
     const brut26 = kisi26 * maas26 * ay;
     const brut27 = kisi27 * (maasOcak27 * ayIlkYari + maasTemmuz27 * ayIkinciYari);
     const maliyet26 = brut26 * (1 + sgk) + kisi26 * yanHak26 * ay;
-    const maliyet27 = brut27 * (1 + sgk) + kisi27 * yanHak27 * ay;
+    const maliyet27 = brut27 * (1 + sgk) + kisi27 * yanHak27 * ay27;
     return {
-      kisi26, kisi27, onerilenKisi27, ay, maas26, maasOcak27, maasTemmuz27,
+      kisi26, kisi27, onerilenKisi27, ay, ay27, maas26, maasOcak27, maasTemmuz27,
       ocakZam, temmuzZam, maliyet26, maliyet27,
-      kisiBasi27: bol(maliyet27, kisi27 * ay),
+      kisiBasi27: bol(maliyet27, kisi27 * ay27),
     };
   });
   const personelOzet = {
@@ -160,7 +166,8 @@ export function hesaplaTemel(veri, senaryo = {}) {
     } else {
       tutar26 = sayi(g.tutar2026);
       const hacim = g.tip === 'degisken' ? hacimOrani : 1;
-      tutar27 = tutar26 * hacim * (1 + artis / 100);
+      // 2027 tutarı doğrudan girilmişse (ör. imzalı kira sözleşmesi) o kullanılır.
+      tutar27 = bos(g.tutar2027) ? tutar26 * hacim * (1 + artis / 100) : sayi(g.tutar2027);
     }
     return { artis, tutar26, tutar27, oran26, oran27 };
   });
@@ -196,7 +203,7 @@ export function hesaplaTemel(veri, senaryo = {}) {
     personelOrani26: bol(personelOzet.maliyet26, gelir26),
     personelOrani27: bol(personelOzet.maliyet27, gelir27),
     personelOdaOrani26: bol(personelOzet.kisi26, oda.adet),
-    personelOdaOrani27: bol(personelOzet.kisi27, oda.adet),
+    personelOdaOrani27: bol(personelOzet.kisi27, oda.adet27),
     goppar26: bol(kar26, oda.kapasite26),
     goppar27: bol(kar27, oda.kapasite27),
   };
@@ -274,12 +281,13 @@ export function hesapla(veri) {
 
 export function bosVeri() {
   return {
-    otel: { ad: 'Otelim', paraBirimi: '₺', acikGun2026: 365, acikGun2027: 365 },
+    otel: { ad: 'Otelim', paraBirimi: '₺', acikGun2026: 365, acikGun2027: '' },
+    // 2027 zamları kullanıcı kararıdır; boş bırakılanlar %0 kabul edilir.
     varsayimlar: {
-      enflasyon: 20,
-      odaFiyatZam: 20,
-      ocakZam: 20,
-      temmuzZam: 8,
+      enflasyon: '',
+      odaFiyatZam: '',
+      ocakZam: '',
+      temmuzZam: '',
       sgkIsveren: 22.75,
       kurumlarVergisi: 25,
       hedefKarMarji: 20,

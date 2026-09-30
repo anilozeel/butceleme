@@ -62,7 +62,7 @@ async function api(req, res, yol) {
     try {
       return gonder(res, 200, await fs.readFile(VERI_DOSYASI, 'utf8'));
     } catch {
-      return gonder(res, 200, await fs.readFile(ORNEK_DOSYASI, 'utf8'));
+      return gonder(res, 200, {}); // ilk açılış: boş bütçe
     }
   }
   if (yol === '/api/veri' && req.method === 'PUT') {

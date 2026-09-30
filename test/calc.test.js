@@ -88,3 +88,19 @@ test('boş veri hata vermez', () => {
   assert.equal(s.gelir27, 0);
   assert.equal(s.kar27, 0);
 });
+
+test('2027 kararları: doğrudan maaş, çalışma ayı, oda adedi ve gider tutarı', () => {
+  const v = veriOlustur({
+    odalar: [{ adet: 10, adet2027: 12, fiyat2026: 1000, doluluk2026: 50, doluluk2027: 50 }],
+    personel: [{ kisi2026: 1, maas2026: 1000, maas2027: 1500, ay: 12, ay2027: 6 }],
+    giderler: [{ kategori: 'Kira', tip: 'sabit', tutar2026: 1000, tutar2027: 5000 }],
+  });
+  const s = hesaplaTemel(v);
+  yakin(s.oda.satilan27, 12 * 100 * 0.5);
+  const p = s.personel[0];
+  yakin(p.maasOcak27, 1500);
+  yakin(p.ocakZam, 50);
+  // 3 ay 1500, 3 ay 1650, SGK %20
+  yakin(p.maliyet27, (1500 * 3 + 1650 * 3) * 1.2);
+  yakin(s.giderler[0].tutar27, 5000);
+});

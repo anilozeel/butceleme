@@ -112,12 +112,16 @@ button.sil:hover { color: var(--kotu); }
 .kpi .fark { font-size: 12px; color: var(--metin-2); }
 
 .sekmeler {
-  display: flex; gap: 2px; overflow-x: auto;
-  padding: 0 12px; border-top: 1px solid var(--cizgi);
+  display: flex; gap: 0; overflow-x: auto;
+  padding: 0 8px; border-top: 1px solid var(--cizgi);
 }
+.sekme-grup { display: flex; flex-direction: column; padding: 6px 8px 0; border-left: 1px solid var(--cizgi); }
+.sekme-grup:first-child { border-left: none; }
+.grup-ad { font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--metin-3); padding: 0 10px; white-space: nowrap; }
+.grup-dugmeler { display: flex; }
 .sekmeler button {
   background: none; border: none; border-bottom: 2px solid transparent;
-  border-radius: 0; padding: 10px 12px; color: var(--metin-2); white-space: nowrap;
+  border-radius: 0; padding: 6px 10px 9px; color: var(--metin-2); white-space: nowrap;
 }
 .sekmeler button[aria-selected="true"] { color: var(--metin); border-bottom-color: var(--vurgu); font-weight: 600; }
 
@@ -214,3 +218,9 @@ table.duyarlilik td.zarar { background: var(--kotu-zemin); color: var(--kotu); }
 table.gider-tablo { table-layout: fixed; min-width: 1050px; }
 .gider-tablo input[type="text"], .gider-tablo select { width: 100%; }
 .gider-tablo td { overflow: hidden; text-overflow: ellipsis; }
+
+.tablo td.salt { color: var(--metin-2); }
+.tablo td.vurgu { font-weight: 600; }
+.sonraki { display: flex; justify-content: flex-end; margin: 4px 0 24px; }
+.baslarken ol { margin: 0 0 16px; padding-left: 20px; line-height: 1.8; }
+@media print { .sonraki { display: none; } }
