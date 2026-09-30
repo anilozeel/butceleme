@@ -66,3 +66,16 @@ test('TCMB kur XML okunur', () => {
   assert.equal(r.kurlar.GBP, undefined);
   assert.equal(r.tarih, '30.09.2026');
 });
+
+test('acentenin indirimli oda fiyatı (2 kişi, afiş fiyatı)', () => {
+  const t = netTablo({
+    ayarlar: { komisyon: 20, erkenRez: 25, kisi: 2, doviz: 'EUR', kurlar: { EUR: 50 } },
+    fiyatlar: [{ fiyat: 4500 }],
+  });
+  const r = t.satirlar[0];
+  yakin(r.odaSatis, 9000);
+  yakin(r.odaIndirimli, 6750);
+  yakin(r.odaNet, 5400);
+  yakin(r.dOdaIndirimli, 135);
+  yakin(t.ortalama.odaIndirimli, 6750);
+});

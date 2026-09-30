@@ -62,7 +62,7 @@ const FN = {
       k('Erken Rezervasyon', `%${nf1.format(Number(a.erkenRez) || 0)}`, 'Önce düşülür'),
       k('Acente Komisyonu', `%${nf1.format(Number(a.komisyon) || 0)}`, 'Sonra düşülür'),
       k('Toplam kesinti', yz(ornek.toplamKesinti), `100 ₺ satıştan ${nf2.format(ornek.net)} ₺ net kalır`),
-      k('Ort. NET (kişi başı)', tl(s.ortalama.net), d ? dvz(s.ortalama.dNet) : `Satış ${tl(s.ortalama.satis)}`),
+      k(`Ort. acente satış fiyatı (oda, ${s.kisi} kişi)`, tl(s.ortalama.odaIndirimli), d ? `İndirimli, afiş fiyatı · ${dvz(s.ortalama.dOdaIndirimli)}` : 'Erken rez. indirimli, afiş fiyatı'),
       k(`Ort. NET (oda, ${s.kisi} kişi)`, tl(s.ortalama.odaNet), d ? dvz(s.ortalama.dOdaNet) : `Satış ${tl(s.ortalama.odaSatis)}`),
     ].join('');
   },
@@ -124,8 +124,8 @@ function sayfa() {
     <td class="girdi">${sayiGirdi(`fiyatlar.${i}.erkenRez`, { cls: 'kisa', min: 0, max: 100, ph: `%${a.erkenRez || 0}`, etiket: 'Erken rezervasyon %' })}</td>
     ${cikti(`satirlar.${i}.ebIndirim`, 'eksi')}${cikti(`satirlar.${i}.ebSonrasi`)}
     ${cikti(`satirlar.${i}.komisyon`, 'eksi')}${cikti(`satirlar.${i}.net`, 'tl', 'net-hucre')}
-    ${cikti(`satirlar.${i}.odaSatis`)}${cikti(`satirlar.${i}.odaNet`, 'tl', 'net-hucre')}
-    ${d ? cikti(`satirlar.${i}.dNet`, 'dvz', 'doviz-hucre') + cikti(`satirlar.${i}.dOdaNet`, 'dvz', 'doviz-hucre') : ''}
+    ${cikti(`satirlar.${i}.odaSatis`)}${cikti(`satirlar.${i}.odaIndirimli`, 'tl', 'afis-hucre')}${cikti(`satirlar.${i}.odaNet`, 'tl', 'net-hucre')}
+    ${d ? cikti(`satirlar.${i}.dOdaIndirimli`, 'dvz', 'afis-hucre') + cikti(`satirlar.${i}.dNet`, 'dvz', 'doviz-hucre') + cikti(`satirlar.${i}.dOdaNet`, 'dvz', 'doviz-hucre') : ''}
     ${cikti(`satirlar.${i}.toplamKesinti`, 'yuzde')}
     <td><button type="button" class="sil" data-kopyala="${i}" title="Satırı kopyala" aria-label="Satırı kopyala">⧉</button>
       <button type="button" class="sil" data-sil="${i}" title="Satırı sil" aria-label="Satırı sil">✕</button></td></tr>`).join('');
@@ -173,20 +173,23 @@ function sayfa() {
 
   <section class="kart">
     <h2>Fiyat Listesi</h2>
-    <p class="aciklama">Her dönem ve oda tipi için kişi başı gecelik satış fiyatını TL olarak yazın. Yeşil sütunlar otele kalan net tutarlardır.</p>
+    <p class="aciklama">Her dönem ve oda tipi için kişi başı gecelik satış fiyatını TL olarak yazın. <strong>Sarı sütun</strong> acentenin erken rezervasyon indirimiyle satacağı (ilan edeceği) oda fiyatı,
+      <strong>yeşil sütunlar</strong> otele kalan net tutarlardır.</p>
     <div class="kaydir"><table class="tablo net-tablo">
       <thead><tr>
         <th class="sol">Dönem</th><th class="sol">Oda Tipi</th><th>Satış Fiyatı<span class="yil">kişi başı, TL</span></th>
         <th>Erken Rez.<span class="yil">%</span></th><th>Erken Rez.<span class="yil">indirimi</span></th><th>İndirimli<span class="yil">kişi başı</span></th>
         <th>Komisyon<span class="yil">%${nf1.format(Number(a.komisyon) || 0)}</span></th><th>NET<span class="yil">kişi başı</span></th>
-        <th>Satış<span class="yil">oda, ${kisi} kişi</span></th><th>NET<span class="yil">oda, ${kisi} kişi</span></th>
-        ${d ? `<th>NET ${sembol}<span class="yil">kişi başı</span></th><th>NET ${sembol}<span class="yil">oda, ${kisi} kişi</span></th>` : ''}
+        <th>Satış<span class="yil">oda, ${kisi} kişi</span></th>
+        <th class="afis-baslik">Acentenin İndirimli<br>Satış Fiyatı<span class="yil">oda, ${kisi} kişi · afiş fiyatı</span></th>
+        <th>NET<span class="yil">oda, ${kisi} kişi</span></th>
+        ${d ? `<th class="afis-baslik">Acente Satış ${sembol}<span class="yil">oda, ${kisi} kişi · afiş</span></th><th>NET ${sembol}<span class="yil">kişi başı</span></th><th>NET ${sembol}<span class="yil">oda, ${kisi} kişi</span></th>` : ''}
         <th>Toplam<span class="yil">kesinti</span></th><th></th>
       </tr></thead>
-      <tbody>${satirlar || `<tr><td class="sol bos" colspan="${d ? 14 : 12}">Henüz fiyat yok. Aşağıdan ekleyin.</td></tr>`}
+      <tbody>${satirlar || `<tr><td class="sol bos" colspan="${d ? 16 : 13}">Henüz fiyat yok. Aşağıdan ekleyin.</td></tr>`}
         <tr class="toplam"><td class="sol" colspan="2">Ortalama</td>${cikti('ortalama.satis')}<td></td><td></td><td></td><td></td>
-          ${cikti('ortalama.net', 'tl', 'net-hucre')}${cikti('ortalama.odaSatis')}${cikti('ortalama.odaNet', 'tl', 'net-hucre')}
-          ${d ? cikti('ortalama.dNet', 'dvz', 'doviz-hucre') + cikti('ortalama.dOdaNet', 'dvz', 'doviz-hucre') : ''}
+          ${cikti('ortalama.net', 'tl', 'net-hucre')}${cikti('ortalama.odaSatis')}${cikti('ortalama.odaIndirimli', 'tl', 'afis-hucre')}${cikti('ortalama.odaNet', 'tl', 'net-hucre')}
+          ${d ? cikti('ortalama.dOdaIndirimli', 'dvz', 'afis-hucre') + cikti('ortalama.dNet', 'dvz', 'doviz-hucre') + cikti('ortalama.dOdaNet', 'dvz', 'doviz-hucre') : ''}
           ${cikti('ortalama.toplamKesinti', 'yuzde')}<td></td></tr>
       </tbody>
     </table></div>
@@ -218,13 +221,13 @@ function raporHtml(s) {
     </div>
     <table class="rapor-tablo">
       <thead><tr><th class="sol">Dönem</th><th class="sol">Oda Tipi</th><th>Satış<br>kişi başı</th><th>Erken<br>Rez. %</th>
-        <th>İndirimli<br>kişi başı</th><th>Komisyon</th><th>NET<br>kişi başı</th><th>Satış<br>oda (${s.kisi} kişi)</th><th>NET<br>oda (${s.kisi} kişi)</th>
-        ${d ? `<th>NET ${sembol}<br>kişi başı</th><th>NET ${sembol}<br>oda (${s.kisi} kişi)</th>` : ''}</tr></thead>
+        <th>İndirimli<br>kişi başı</th><th>Komisyon</th><th>NET<br>kişi başı</th><th>Satış<br>oda (${s.kisi} kişi)</th><th>Acentenin indirimli<br>satış fiyatı · oda (${s.kisi} kişi)</th><th>NET<br>oda (${s.kisi} kişi)</th>
+        ${d ? `<th>Acente satış ${sembol}<br>oda (${s.kisi} kişi)</th><th>NET ${sembol}<br>kişi başı</th><th>NET ${sembol}<br>oda (${s.kisi} kişi)</th>` : ''}</tr></thead>
       <tbody>${dolu.map(({ f, r }) => `<tr><td class="sol">${esc(f.donem)}</td><td class="sol">${esc(f.odaTipi)}</td>
         <td>${tl(r.satis)}</td><td>%${nf1.format(r.eb)}</td><td>${tl(r.ebSonrasi)}</td><td>${tl(r.komisyon)}</td>
-        <td class="net">${tl(r.net)}</td><td>${tl(r.odaSatis)}</td><td class="net">${tl(r.odaNet)}</td>
-        ${d ? `<td class="net">${dvz(r.dNet)}</td><td class="net">${dvz(r.dOdaNet)}</td>` : ''}</tr>`).join('')
-        || `<tr><td colspan="${d ? 11 : 9}">Fiyat girilmemiş.</td></tr>`}</tbody>
+        <td class="net">${tl(r.net)}</td><td>${tl(r.odaSatis)}</td><td class="afis">${tl(r.odaIndirimli)}</td><td class="net">${tl(r.odaNet)}</td>
+        ${d ? `<td class="afis">${dvz(r.dOdaIndirimli)}</td><td class="net">${dvz(r.dNet)}</td><td class="net">${dvz(r.dOdaNet)}</td>` : ''}</tr>`).join('')
+        || `<tr><td colspan="${d ? 13 : 10}">Fiyat girilmemiş.</td></tr>`}</tbody>
     </table>
     <p class="rapor-not">NET = Satış fiyatı × (1 − Erken Rezervasyon %) × (1 − Komisyon %). Önce Erken Rezervasyon indirimi, sonra acente komisyonu düşülmüştür.
       Fiyatlar kişi başı gecelik${d ? `; döviz karşılıkları TL ÷ kur ile hesaplanmıştır` : ''}.</p>`;
@@ -398,12 +401,12 @@ function csvIndir() {
     ...(d ? [satir(`1 ${a.doviz} (TL)`, sonuc.kur, a.kurTarihi || '')] : []),
     '',
     satir('Dönem', 'Oda Tipi', 'Satış TL (kişi)', 'Erken Rez. %', 'Erken Rez. indirimi TL', 'İndirimli TL (kişi)', 'Komisyon TL',
-      'NET TL (kişi)', `Satış TL (oda, ${k} kişi)`, `NET TL (oda, ${k} kişi)`,
-      ...(d ? [`NET ${a.doviz} (kişi)`, `NET ${a.doviz} (oda, ${k} kişi)`] : []), 'Toplam kesinti %'),
+      'NET TL (kişi)', `Satış TL (oda, ${k} kişi)`, `Acentenin indirimli satış fiyatı TL (oda, ${k} kişi)`, `NET TL (oda, ${k} kişi)`,
+      ...(d ? [`Acente satış ${a.doviz} (oda, ${k} kişi)`, `NET ${a.doviz} (kişi)`, `NET ${a.doviz} (oda, ${k} kişi)`] : []), 'Toplam kesinti %'),
     ...veri.fiyatlar.map((f, i) => {
       const r = sonuc.satirlar[i];
-      return satir(f.donem, f.odaTipi, r.satis, r.eb, r.ebIndirim, r.ebSonrasi, r.komisyon, r.net, r.odaSatis, r.odaNet,
-        ...(d ? [r.dNet, r.dOdaNet] : []), r.toplamKesinti * 100);
+      return satir(f.donem, f.odaTipi, r.satis, r.eb, r.ebIndirim, r.ebSonrasi, r.komisyon, r.net, r.odaSatis, r.odaIndirimli, r.odaNet,
+        ...(d ? [r.dOdaIndirimli, r.dNet, r.dOdaNet] : []), r.toplamKesinti * 100);
     }),
   ];
   const ad = (veri.ad || 'net-oda-fiyatlari').toLocaleLowerCase('tr-TR').replace(/[^a-z0-9çğıöşü]+/gi, '-').replace(/^-|-$/g, '');

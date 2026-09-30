@@ -100,6 +100,8 @@ export function netTablo(veri) {
       ...r, eb,
       odaSatis: r.satis * kisi,
       odaEbIndirim: r.ebIndirim * kisi,
+      // Acentenin erken rezervasyon indirimiyle satacağı (ilan edeceği) oda fiyatı
+      odaIndirimli: r.ebSonrasi * kisi,
       odaKomisyon: r.komisyon * kisi,
       odaNet: r.net * kisi,
     };
@@ -107,6 +109,7 @@ export function netTablo(veri) {
     satir.dSatis = cevir(satir.satis);
     satir.dNet = cevir(satir.net);
     satir.dOdaSatis = cevir(satir.odaSatis);
+    satir.dOdaIndirimli = cevir(satir.odaIndirimli);
     satir.dOdaNet = cevir(satir.odaNet);
     return satir;
   });
@@ -118,6 +121,7 @@ export function netTablo(veri) {
     satirlar,
     ortalama: {
       satis: ort('satis'), net: ort('net'), odaSatis: ort('odaSatis'), odaNet: ort('odaNet'),
+      odaIndirimli: ort('odaIndirimli'), dOdaIndirimli: cevir(ort('odaIndirimli')),
       dSatis: cevir(ort('satis')), dNet: cevir(ort('net')), dOdaSatis: cevir(ort('odaSatis')), dOdaNet: cevir(ort('odaNet')),
       toplamKesinti: ort('satis') ? 1 - ort('net') / ort('satis') : 0,
     },

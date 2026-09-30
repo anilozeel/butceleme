@@ -24,7 +24,8 @@ Tarayıcıda **http://localhost:3001** açılır. (Bütçe programı 3000'de ça
    `NET = Satış × (1 − Erken Rez. %) × (1 − Komisyon %)`
 
    Örnek: 2.500 ₺ → %15 indirim → 2.125 ₺ → %20 komisyon → **1.700 ₺ net** (toplam kesinti %32, %35 değil).
-   2 kişilik oda net: 3.400 ₺.
+   2 kişilik oda: satış 5.000 ₺ → **acentenin indirimli satış fiyatı (afiş fiyatı) 4.250 ₺** → net 3.400 ₺.
+   Tabloda sarı sütun acentenin ilan edeceği indirimli oda fiyatı, yeşil sütunlar otele kalan nettir.
 5. **Döviz (isteğe bağlı):** EUR / USD / GBP seçilir; kur elle yazılır veya **TCMB kurlarını getir** ile
    TCMB döviz alış kuru çekilir (internet gerekir). Döviz karşılığı = TL ÷ kur.
 6. **Ters hesap:** hedef net fiyat yazılır, gereken satış fiyatı bulunur.

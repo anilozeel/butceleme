@@ -1,5 +1,7 @@
 :root {
   color-scheme: light;
+  --afis-zemin: #fff4d6;
+  --afis-cizgi: #d99a00;
   --zemin: #f4f4f2;
   --yuzey: #fcfcfb;
   --yuzey-2: #efeeeb;
@@ -34,6 +36,8 @@
     --kotu-zemin: #3a1f1f;
     --iyi-zemin: #1b3325;
     --girdi-zemin: #121211;
+    --afis-zemin: #3a2f12;
+    --afis-cizgi: #c98500;
   }
 }
 :root[data-theme="dark"] {
@@ -53,6 +57,8 @@
   --kotu-zemin: #3a1f1f;
   --iyi-zemin: #1b3325;
   --girdi-zemin: #121211;
+  --afis-zemin: #3a2f12;
+  --afis-cizgi: #c98500;
 }
 
 * { box-sizing: border-box; }
@@ -247,3 +253,7 @@ input[type="date"] { background: var(--girdi-zemin); border: 1px solid var(--ciz
 .tablo td.net-hucre { background: var(--iyi-zemin); font-weight: 700; }
 .tablo td.doviz-hucre { background: var(--vurgu-zemin); font-weight: 600; }
 .tablo tr.acik-liste td { background: var(--vurgu-zemin); }
+
+/* Acentenin indirimli satış (afiş) fiyatı */
+.tablo td.afis-hucre { background: var(--afis-zemin); font-weight: 700; }
+.tablo th.afis-baslik { background: var(--afis-zemin); color: var(--metin); border-bottom: 2px solid var(--afis-cizgi); }
