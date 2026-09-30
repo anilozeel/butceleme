@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { netHesapla, gerekenSatis, netTablo, depoHazirla, tcmbKurlariniOku } from '../public/net-fiyat-calc.js';
+import { netHesapla, gerekenSatis, netTablo, depoHazirla, tcmbKurlariniOku } from '../public/hesap.js';
 
 const yakin = (a, b, tol = 1e-6) => assert.ok(Math.abs(a - b) <= tol, `${a} ≠ ${b}`);
 

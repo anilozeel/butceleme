@@ -1,0 +1,14 @@
+{
+  "name": "net-oda-fiyati",
+  "version": "1.0.0",
+  "description": "Net oda fiyatı hesaplama - satış fiyatından erken rezervasyon ve acente komisyonu düşülerek net fiyat",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

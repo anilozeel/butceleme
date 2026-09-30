@@ -1,6 +1,6 @@
 import {
   bosListe, depoHazirla, netTablo, netHesapla, gerekenSatis, aktifKur, tcmbKurlariniOku, DOVIZLER,
-} from './net-fiyat-calc.js';
+} from './hesap.js';
 
 // depo: kayıtlı tüm fiyat listeleri; veri: açık olan liste
 let depo = depoHazirla({});
@@ -262,7 +262,7 @@ function kaydetPlanla(degisti = true) {
   clearTimeout(zamanlayici);
   zamanlayici = setTimeout(async () => {
     try {
-      const y = await fetch('/api/net-fiyat', {
+      const y = await fetch('/api/veri', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(depo),
       });
       if (!y.ok) throw new Error();
@@ -418,7 +418,7 @@ function csvIndir() {
 // ---------------- Başlangıç ----------------
 (async function baslat() {
   try {
-    const y = await fetch('/api/net-fiyat');
+    const y = await fetch('/api/veri');
     depo = depoHazirla(await y.json());
     durum('Veriler yüklendi');
   } catch {

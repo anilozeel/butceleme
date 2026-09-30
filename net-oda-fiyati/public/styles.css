@@ -236,3 +236,14 @@ input[type="date"] { background: var(--girdi-zemin); border: 1px solid var(--ciz
 .bordro-detay summary { cursor: pointer; font-weight: 600; font-size: 13px; color: var(--metin-2); }
 .bordro-detay[open] summary { margin-bottom: 8px; }
 
+/* Net oda fiyatı */
+.akis { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 16px; }
+.akis .adim { display: flex; flex-direction: column; padding: 8px 14px; border: 1px solid var(--cizgi); border-radius: 8px; background: var(--yuzey-2); }
+.akis .adim small { color: var(--metin-3); font-size: 11px; }
+.akis .adim strong { font-size: 18px; font-variant-numeric: tabular-nums; }
+.akis .adim.vurgulu { background: var(--iyi-zemin); border-color: var(--iyi); }
+.akis .ok { color: var(--metin-2); font-size: 13px; }
+.akis .ok::before { content: '→ '; }
+.tablo td.net-hucre { background: var(--iyi-zemin); font-weight: 700; }
+.tablo td.doviz-hucre { background: var(--vurgu-zemin); font-weight: 600; }
+.tablo tr.acik-liste td { background: var(--vurgu-zemin); }
