@@ -1,0 +1,14 @@
+{
+  "name": "otel-butceleme",
+  "version": "1.0.0",
+  "description": "Otel bütçeleme yazılımı - 2026 verilerinden 2027 bütçesi oluşturur",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

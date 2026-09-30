@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Otel Bütçeleme 2027</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="ust">
+    <div class="ust-satir">
+      <div class="marka">
+        <strong id="otel-adi">Otel Bütçeleme</strong>
+        <span class="alt-baslik">2026 → 2027 Bütçe</span>
+      </div>
+      <div class="araclar">
+        <span id="kayit-durumu" class="kayit-durumu" aria-live="polite"></span>
+        <button type="button" data-islem="csv">Excel'e aktar (CSV)</button>
+        <button type="button" data-islem="json">Yedek indir</button>
+        <label class="dugme">Yedek yükle<input type="file" id="ice-aktar" accept=".json,application/json" hidden></label>
+        <button type="button" data-islem="yazdir">Yazdır</button>
+        <details class="menu">
+          <summary>Diğer</summary>
+          <div class="menu-icerik">
+            <button type="button" data-islem="ornek">Örnek veriyi yükle</button>
+            <button type="button" data-islem="bos">Boş bütçe başlat</button>
+          </div>
+        </details>
+      </div>
+    </div>
+    <div class="kpi-serit" id="kpi-serit"></div>
+    <nav class="sekmeler" role="tablist">
+      <button type="button" role="tab" data-sekme="ozet">Özet</button>
+      <button type="button" role="tab" data-sekme="varsayimlar">2027 Zam Varsayımları</button>
+      <button type="button" role="tab" data-sekme="odalar">Odalar &amp; Gelirler</button>
+      <button type="button" role="tab" data-sekme="personel">Personel</button>
+      <button type="button" role="tab" data-sekme="giderler">Giderler</button>
+      <button type="button" role="tab" data-sekme="hedef">Fiyat Hedefi &amp; Senaryo</button>
+    </nav>
+  </header>
+  <main id="icerik" class="icerik"></main>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

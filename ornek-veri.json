@@ -1,0 +1,58 @@
+{
+  "otel": { "ad": "Örnek Otel (100 oda)", "paraBirimi": "₺", "acikGun2026": 365, "acikGun2027": 365 },
+  "varsayimlar": {
+    "enflasyon": 20,
+    "odaFiyatZam": 22,
+    "ocakZam": 20,
+    "temmuzZam": 8,
+    "sgkIsveren": 22.75,
+    "kurumlarVergisi": 25,
+    "hedefKarMarji": 20,
+    "kategoriZam": {
+      "Kira": 28,
+      "Elektrik": 30,
+      "Su": 25,
+      "Doğalgaz / Yakıt": 25,
+      "Vergi ve Harçlar": 20,
+      "Gıda & İçecek Maliyeti": 22
+    }
+  },
+  "odalar": [
+    { "id": "o1", "ad": "Standart Oda", "adet": 60, "fiyat2026": 3500, "doluluk2026": 72, "fiyatZam": "", "doluluk2027": 74 },
+    { "id": "o2", "ad": "Deluxe Oda", "adet": 30, "fiyat2026": 5000, "doluluk2026": 68, "fiyatZam": "", "doluluk2027": 70 },
+    { "id": "o3", "ad": "Suit", "adet": 10, "fiyat2026": 9000, "doluluk2026": 55, "fiyatZam": 25, "doluluk2027": 58 }
+  ],
+  "digerGelirler": [
+    { "id": "d1", "ad": "Yiyecek & İçecek", "tutar2026": 35000000, "tip": "degisken", "artis": 22 },
+    { "id": "d2", "ad": "SPA & Wellness", "tutar2026": 6000000, "tip": "degisken", "artis": "" },
+    { "id": "d3", "ad": "Toplantı / Organizasyon", "tutar2026": 4000000, "tip": "sabit", "artis": "" },
+    { "id": "d4", "ad": "Diğer (otopark, çamaşır vb.)", "tutar2026": 1500000, "tip": "sabit", "artis": "" }
+  ],
+  "personel": [
+    { "id": "p1", "departman": "Yönetim", "pozisyon": "Genel Müdür", "kisi2026": 1, "kisi2027": "", "maas2026": 180000, "ay": 12, "yanHak": 8000, "dolulugaBagli": false },
+    { "id": "p2", "departman": "Ön Büro", "pozisyon": "Ön Büro Personeli", "kisi2026": 8, "kisi2027": "", "maas2026": 45000, "ay": 12, "yanHak": 6000, "dolulugaBagli": false },
+    { "id": "p3", "departman": "Kat Hizmetleri", "pozisyon": "Kat Görevlisi", "kisi2026": 20, "kisi2027": "", "maas2026": 34000, "ay": 12, "yanHak": 6000, "dolulugaBagli": true },
+    { "id": "p4", "departman": "Mutfak", "pozisyon": "Aşçı / Mutfak Personeli", "kisi2026": 12, "kisi2027": "", "maas2026": 42000, "ay": 12, "yanHak": 6000, "dolulugaBagli": true },
+    { "id": "p5", "departman": "Yiyecek & İçecek", "pozisyon": "Garson / Barmen", "kisi2026": 14, "kisi2027": "", "maas2026": 34000, "ay": 12, "yanHak": 6000, "dolulugaBagli": true },
+    { "id": "p6", "departman": "Teknik", "pozisyon": "Teknik Servis", "kisi2026": 5, "kisi2027": "", "maas2026": 42000, "ay": 12, "yanHak": 6000, "dolulugaBagli": false },
+    { "id": "p7", "departman": "Muhasebe & İK", "pozisyon": "Uzman", "kisi2026": 3, "kisi2027": "", "maas2026": 52000, "ay": 12, "yanHak": 6000, "dolulugaBagli": false },
+    { "id": "p8", "departman": "Güvenlik", "pozisyon": "Güvenlik Görevlisi", "kisi2026": 4, "kisi2027": "", "maas2026": 35000, "ay": 12, "yanHak": 6000, "dolulugaBagli": false }
+  ],
+  "giderler": [
+    { "id": "g1", "kategori": "Vergi ve Harçlar", "ad": "Konaklama Vergisi", "tip": "gelirYuzdesi", "baz": "oda", "oran": 2, "oran2027": "", "tutar2026": "", "artis": "" },
+    { "id": "g2", "kategori": "Vergi ve Harçlar", "ad": "Emlak Vergisi", "tip": "sabit", "tutar2026": 650000, "artis": "" },
+    { "id": "g3", "kategori": "Vergi ve Harçlar", "ad": "Çevre Temizlik Vergisi & Harçlar", "tip": "sabit", "tutar2026": 300000, "artis": "" },
+    { "id": "g4", "kategori": "Kira", "ad": "Bina Kirası", "tip": "sabit", "tutar2026": 18000000, "artis": "" },
+    { "id": "g5", "kategori": "Elektrik", "ad": "Elektrik", "tip": "degisken", "tutar2026": 9000000, "artis": "" },
+    { "id": "g6", "kategori": "Su", "ad": "Su", "tip": "degisken", "tutar2026": 2500000, "artis": "" },
+    { "id": "g7", "kategori": "Doğalgaz / Yakıt", "ad": "Doğalgaz", "tip": "sabit", "tutar2026": 4000000, "artis": "" },
+    { "id": "g8", "kategori": "Komisyonlar", "ad": "Acente / OTA Komisyonu", "tip": "gelirYuzdesi", "baz": "oda", "oran": 12, "oran2027": "", "tutar2026": "", "artis": "" },
+    { "id": "g9", "kategori": "Gıda & İçecek Maliyeti", "ad": "Yiyecek & İçecek Maliyeti", "tip": "degisken", "tutar2026": 12000000, "artis": "" },
+    { "id": "g10", "kategori": "Satış & Pazarlama", "ad": "Reklam & Dijital Pazarlama", "tip": "sabit", "tutar2026": 3000000, "artis": "" },
+    { "id": "g11", "kategori": "Bakım & Onarım", "ad": "Bakım & Onarım", "tip": "sabit", "tutar2026": 4000000, "artis": "" },
+    { "id": "g12", "kategori": "Sigorta", "ad": "Bina & İşletme Sigortası", "tip": "sabit", "tutar2026": 1500000, "artis": "" },
+    { "id": "g13", "kategori": "Genel Yönetim Giderleri", "ad": "Temizlik Malzemesi & Bukleler", "tip": "degisken", "tutar2026": 2500000, "artis": "" },
+    { "id": "g14", "kategori": "Genel Yönetim Giderleri", "ad": "Çamaşırhane", "tip": "degisken", "tutar2026": 2000000, "artis": "" },
+    { "id": "g15", "kategori": "Genel Yönetim Giderleri", "ad": "Yazılım, İletişim, Ofis", "tip": "sabit", "tutar2026": 1800000, "artis": "" }
+  ]
+}
