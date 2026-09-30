@@ -12,6 +12,20 @@ const ya = (v, varsayilan) => (bos(v) ? sayi(varsayilan) : sayi(v));
 
 export const DOVIZLER = { EUR: '€', USD: '$', GBP: '£' };
 
+// Otelin oda tipleri: yeni listede ve "Dönem ekle"de her biri için satır açılır.
+export const ODA_TIPLERI = [
+  'Ekonomik Oda',
+  'Bahçe Manzaralı Oda',
+  'Standart Deniz veya Havuz Manzaralı Oda',
+];
+
+/** Bir dönem için her oda tipine birer boş fiyat satırı. */
+export function donemSatirlari(odaTipleri = ODA_TIPLERI, donem = '') {
+  return odaTipleri.map((odaTipi) => ({
+    id: Math.random().toString(36).slice(2, 10), donem, odaTipi, fiyat: '', erkenRez: '',
+  }));
+}
+
 /** Yeni, boş bir fiyat listesi. Fiyatlar TL girilir; döviz isteğe bağlıdır. */
 export function bosListe(ad = 'Yeni Fiyat Listesi') {
   const simdi = new Date().toISOString();
@@ -20,8 +34,11 @@ export function bosListe(ad = 'Yeni Fiyat Listesi') {
     ad,
     olusturma: simdi,
     guncelleme: simdi,
-    ayarlar: { komisyon: 20, erkenRez: '', kisi: 2, doviz: '', kurlar: { EUR: '', USD: '', GBP: '' }, kurTarihi: '' },
-    fiyatlar: [],
+    ayarlar: {
+      komisyon: 20, erkenRez: '', kisi: 2, doviz: '', kurlar: { EUR: '', USD: '', GBP: '' }, kurTarihi: '',
+      odaTipleri: [...ODA_TIPLERI],
+    },
+    fiyatlar: donemSatirlari(),
   };
 }
 
@@ -43,6 +60,13 @@ export function depoHazirla(gelen = {}) {
       ayarlar: { ...temel.ayarlar, ...(l.ayarlar || {}), kurlar: { ...temel.ayarlar.kurlar, ...(l.ayarlar?.kurlar || {}) } },
       fiyatlar: Array.isArray(l.fiyatlar) ? l.fiyatlar : [],
     };
+  }).map((l) => {
+    const tipler = Array.isArray(l.ayarlar.odaTipleri) && l.ayarlar.odaTipleri.length ? l.ayarlar.odaTipleri : [...ODA_TIPLERI];
+    l.ayarlar.odaTipleri = tipler;
+    // Hiç fiyat girilmemiş (boş) liste: oda tipleriyle doldur.
+    const bosMu = l.fiyatlar.every((f) => !f.fiyat && !f.odaTipi && !f.donem);
+    if (bosMu) l.fiyatlar = donemSatirlari(tipler, l.fiyatlar[0]?.donem || '');
+    return l;
   });
   if (!listeler.length) listeler = [bosListe('Fiyat Listesi 1')];
   const aktifId = listeler.some((l) => l.id === gelen.aktifId) ? gelen.aktifId : listeler[0].id;

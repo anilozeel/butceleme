@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { netHesapla, gerekenSatis, netTablo, depoHazirla, tcmbKurlariniOku } from '../public/hesap.js';
+import { netHesapla, gerekenSatis, netTablo, depoHazirla, tcmbKurlariniOku, bosListe, donemSatirlari, ODA_TIPLERI } from '../public/hesap.js';
 
 const yakin = (a, b, tol = 1e-6) => assert.ok(Math.abs(a - b) <= tol, `${a} ≠ ${b}`);
 
@@ -78,4 +78,18 @@ test('acentenin indirimli oda fiyatı (2 kişi, afiş fiyatı)', () => {
   yakin(r.odaNet, 5400);
   yakin(r.dOdaIndirimli, 135);
   yakin(t.ortalama.odaIndirimli, 6750);
+});
+
+test('oda tipleri: yeni liste 3 oda tipiyle başlar, dönem ekleme her oda için satır açar', () => {
+  const l = bosListe('Deneme');
+  assert.deepEqual(l.fiyatlar.map((f) => f.odaTipi), ODA_TIPLERI);
+  assert.deepEqual(l.ayarlar.odaTipleri, ODA_TIPLERI);
+  const d = donemSatirlari(l.ayarlar.odaTipleri, '01.06 – 30.06');
+  assert.equal(d.length, 3);
+  assert.ok(d.every((f) => f.donem === '01.06 – 30.06'));
+  // Eski boş liste oda tipleriyle dolar, dolu liste değişmez
+  const depo = depoHazirla({ listeler: [{ id: 'a', ad: 'Boş', fiyatlar: [{ donem: '', odaTipi: '', fiyat: '' }] },
+    { id: 'b', ad: 'Dolu', fiyatlar: [{ donem: 'X', odaTipi: 'Suit', fiyat: 100 }] }] });
+  assert.equal(depo.listeler[0].fiyatlar.length, 3);
+  assert.equal(depo.listeler[1].fiyatlar.length, 1);
 });

@@ -257,3 +257,9 @@ input[type="date"] { background: var(--girdi-zemin); border: 1px solid var(--ciz
 /* Acentenin indirimli satış (afiş) fiyatı */
 .tablo td.afis-hucre { background: var(--afis-zemin); font-weight: 700; }
 .tablo th.afis-baslik { background: var(--afis-zemin); color: var(--metin); border-bottom: 2px solid var(--afis-cizgi); }
+
+.ekle-dugmeler { display: flex; flex-wrap: wrap; gap: 8px; }
+.oda-tipleri { display: flex; flex-direction: column; gap: 6px; max-width: 480px; }
+.oda-tipi-satir { display: flex; gap: 6px; align-items: center; }
+.oda-tipi-satir input[type="text"] { flex: 1; width: auto; }
+.net-tablo select { max-width: 340px; }

@@ -1,5 +1,5 @@
 import {
-  bosListe, depoHazirla, netTablo, netHesapla, gerekenSatis, aktifKur, tcmbKurlariniOku, DOVIZLER,
+  bosListe, depoHazirla, netTablo, netHesapla, gerekenSatis, aktifKur, tcmbKurlariniOku, DOVIZLER, donemSatirlari,
 } from './hesap.js';
 
 // depo: kayıtlı tüm fiyat listeleri; veri: açık olan liste
@@ -45,6 +45,13 @@ function secim(yol, secenekler, o = {}) {
   const deger = yolOku(veri, yol) ?? '';
   return `<select data-yol="${esc(yol)}" data-tip="metin" data-yeniden="1" aria-label="${esc(o.etiket || yol)}">${Object.entries(secenekler)
     .map(([k, ad]) => `<option value="${esc(k)}"${k === deger ? ' selected' : ''}>${esc(ad)}</option>`).join('')}</select>`;
+}
+function odaTipiSecim(i) {
+  const secili = veri.fiyatlar[i].odaTipi || '';
+  const tipler = veri.ayarlar.odaTipleri.filter(Boolean);
+  const secenekler = Object.fromEntries([['', '— Oda tipi seçin —'], ...tipler.map((t) => [t, t])]);
+  if (secili && !tipler.includes(secili)) secenekler[secili] = secili;
+  return secim(`fiyatlar.${i}.odaTipi`, secenekler, { etiket: 'Oda tipi' });
 }
 const cikti = (yol, bicim = 'tl', cls = '') => `<td class="cikti ${cls}" data-cikti="${yol}" data-bicim="${bicim}"></td>`;
 const alan = (etiket, girdi, ipucu = '') =>
@@ -119,7 +126,7 @@ function sayfa() {
   const sembol = DOVIZLER[a.doviz] || '';
   const satirlar = veri.fiyatlar.map((f, i) => `<tr>
     <td class="sol girdi">${metinGirdi(`fiyatlar.${i}.donem`, { ph: 'ör. 15.05 – 31.05', etiket: 'Dönem' })}</td>
-    <td class="sol girdi">${metinGirdi(`fiyatlar.${i}.odaTipi`, { ph: 'ör. Standart Oda', etiket: 'Oda tipi' })}</td>
+    <td class="sol girdi">${odaTipiSecim(i)}</td>
     <td class="girdi">${sayiGirdi(`fiyatlar.${i}.fiyat`, { min: 0, etiket: 'Kişi başı satış fiyatı (TL)' })}</td>
     <td class="girdi">${sayiGirdi(`fiyatlar.${i}.erkenRez`, { cls: 'kisa', min: 0, max: 100, ph: `%${a.erkenRez || 0}`, etiket: 'Erken rezervasyon %' })}</td>
     ${cikti(`satirlar.${i}.ebIndirim`, 'eksi')}${cikti(`satirlar.${i}.ebSonrasi`)}
@@ -161,6 +168,18 @@ function sayfa() {
   </section>
 
   <section class="kart">
+    <h2>Oda Tipleri</h2>
+    <p class="aciklama">Fiyat listesinde seçilecek oda tipleri. "Yeni dönem ekle" her oda tipi için bir satır açar.</p>
+    <div class="oda-tipleri">
+      ${a.odaTipleri.map((ad, i) => `<div class="oda-tipi-satir">
+        ${metinGirdi(`ayarlar.odaTipleri.${i}`, { cls: 'uzun', etiket: `Oda tipi ${i + 1}` })}
+        <button type="button" class="sil" data-oda-sil="${i}" title="Oda tipini listeden çıkar" aria-label="Oda tipini listeden çıkar">✕</button>
+      </div>`).join('')}
+    </div>
+    <button type="button" class="ekle" data-oda-ekle="1">+ Oda tipi ekle</button>
+  </section>
+
+  <section class="kart">
     <h2>Döviz Çevirisi (isteğe bağlı)</h2>
     <p class="aciklama">Hesap TL yapılır. Döviz seçerseniz net fiyatların döviz karşılığı da gösterilir (TL ÷ kur).</p>
     <div class="form-izgara">
@@ -193,7 +212,10 @@ function sayfa() {
           ${cikti('ortalama.toplamKesinti', 'yuzde')}<td></td></tr>
       </tbody>
     </table></div>
-    <button type="button" class="ekle" data-ekle="1">+ Fiyat satırı ekle</button>
+    <div class="ekle-dugmeler">
+      <button type="button" class="ekle birincil" data-donem-ekle="1">+ Yeni dönem ekle (tüm oda tipleri)</button>
+      <button type="button" class="ekle" data-ekle="1">+ Tek satır ekle</button>
+    </div>
   </section>
 
   <section class="kart">
@@ -279,7 +301,7 @@ function kaydetPlanla(degisti = true) {
 function listeAc(id) {
   veri = depo.listeler.find((l) => l.id === id) || depo.listeler[0];
   depo.aktifId = veri.id;
-  if (!veri.fiyatlar.length) veri.fiyatlar.push(bosSatir());
+  if (!veri.fiyatlar.length) veri.fiyatlar.push(...donemSatirlari(veri.ayarlar.odaTipleri));
   hedefNet = '';
   ciz();
   window.scrollTo({ top: 0 });
@@ -301,6 +323,24 @@ document.addEventListener('input', (e) => {
   }
   const el = e.target.closest('[data-yol]');
   if (!el || el.tagName === 'SELECT') return;
+  const donemYol = /^fiyatlar\.(\d+)\.donem$/.exec(el.dataset.yol);
+  if (donemYol) {
+    // Aynı dönemin yan yana duran oda satırları birlikte güncellenir.
+    const i = Number(donemYol[1]);
+    const eski = veri.fiyatlar[i].donem || '';
+    let bas = i;
+    let son = i;
+    while (bas > 0 && (veri.fiyatlar[bas - 1].donem || '') === eski) bas--;
+    while (son < veri.fiyatlar.length - 1 && (veri.fiyatlar[son + 1].donem || '') === eski) son++;
+    for (let k = bas; k <= son; k++) {
+      veri.fiyatlar[k].donem = el.value;
+      const kutu = document.querySelector(`[data-yol="fiyatlar.${k}.donem"]`);
+      if (kutu && kutu !== el) kutu.value = el.value;
+    }
+    yaz();
+    kaydetPlanla();
+    return;
+  }
   const deger = el.dataset.tip === 'sayi' ? (el.value === '' ? '' : Number(el.value)) : el.value;
   yolYaz(veri, el.dataset.yol, deger);
   if (el.dataset.yeniden) ciz();
@@ -308,6 +348,11 @@ document.addEventListener('input', (e) => {
   kaydetPlanla();
 });
 document.addEventListener('change', (e) => {
+  // Oda tipi adı değişince fiyat listesindeki seçim kutuları güncellensin.
+  if (e.target.matches('input[data-yol^="ayarlar.odaTipleri."]')) {
+    ciz();
+    return;
+  }
   const el = e.target.closest('select[data-yol]');
   if (!el) return;
   yolYaz(veri, el.dataset.yol, el.value);
@@ -318,7 +363,25 @@ document.addEventListener('change', (e) => {
 document.addEventListener('click', async (e) => {
   const b = e.target.closest('button');
   if (!b) return;
-  if (b.dataset.ekle) {
+  if (b.dataset.donemEkle) {
+    const donem = prompt('Dönem (ör. 01.06 – 30.06):', '');
+    if (donem === null) return;
+    const ilk = veri.fiyatlar.length;
+    veri.fiyatlar.push(...donemSatirlari(veri.ayarlar.odaTipleri.filter(Boolean), donem.trim()));
+    ciz();
+    kaydetPlanla();
+    document.querySelector(`[data-yol="fiyatlar.${ilk}.fiyat"]`)?.focus();
+  } else if (b.dataset.odaEkle) {
+    veri.ayarlar.odaTipleri.push('');
+    ciz();
+    document.querySelector(`[data-yol="ayarlar.odaTipleri.${veri.ayarlar.odaTipleri.length - 1}"]`)?.focus();
+  } else if (b.dataset.odaSil !== undefined) {
+    const i = Number(b.dataset.odaSil);
+    if (!confirm(`"${veri.ayarlar.odaTipleri[i] || 'Bu oda tipi'}" listeden çıkarılsın mı? (Girilmiş fiyatlar silinmez.)`)) return;
+    veri.ayarlar.odaTipleri.splice(i, 1);
+    ciz();
+    kaydetPlanla();
+  } else if (b.dataset.ekle) {
     veri.fiyatlar.push(bosSatir(veri.fiyatlar[veri.fiyatlar.length - 1]?.donem || ''));
     ciz();
     kaydetPlanla();
