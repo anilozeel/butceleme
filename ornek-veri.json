@@ -20,7 +20,8 @@
       "Doğalgaz / Yakıt": 25,
       "Vergi ve Harçlar": 20,
       "Gıda & İçecek Maliyeti": 22
-    }
+    },
+    "maasTipi": "brut"
   },
   "odaGiris": "tip",
   "odalar": [

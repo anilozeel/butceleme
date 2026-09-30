@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { hesapla, hesaplaTemel, bosVeri, donem } from '../public/calc.js';
+import { hesapla, hesaplaTemel, bosVeri, donem, aylikBordro, nettenBrut, bordroParametreleri } from '../public/calc.js';
 
 const yakin = (a, b, tol = 0.01) => assert.ok(Math.abs(a - b) <= tol, `${a} ≠ ${b}`);
 
@@ -9,7 +9,7 @@ function veriOlustur(ekle = {}) {
   const v = bosVeri();
   v.otel.acikGun2026 = 100;
   v.otel.acikGun2027 = 100;
-  Object.assign(v.varsayimlar, { enflasyon: 10, odaFiyatZam: 20, ocakZam: 10, temmuzZam: 10, sgkIsveren: 20, kurumlarVergisi: 25, hedefKarMarji: 20 });
+  Object.assign(v.varsayimlar, { maasTipi: 'brut', enflasyon: 10, odaFiyatZam: 20, ocakZam: 10, temmuzZam: 10, sgkIsveren: 20, kurumlarVergisi: 25, hedefKarMarji: 20 });
   return { ...v, odaGiris: 'tip', ...ekle };
 }
 
@@ -172,4 +172,31 @@ test('toplam oda girişi: satılan oda-gece ve oda geliri ile', () => {
   yakin(s.oda.adr27, 5000);
   yakin(s.oda.gelir27, 55_000_000, 1e-3);
   assert.equal(s.odalar[0].ad, 'Tüm odalar');
+});
+
+test('bordro: asgari ücretli net = brüt × 0,85 (vergi istisnası)', () => {
+  const P = bordroParametreleri(bosVeri().varsayimlar, 2026);
+  const r = aylikBordro(33030, 0, 33030, 0, P);
+  yakin(r.net, 28075.5);
+  yakin(nettenBrut(28075.5, 0, 33030, 0, P), 33030, 0.05);
+});
+
+test('bordro: netten brüte çeviri tutarlı (yüksek maaş, kümülatif matrah)', () => {
+  const P = bordroParametreleri(bosVeri().varsayimlar, 2026);
+  for (const [net, K, ay] of [[50000, 0, 0], [80000, 300000, 6], [150000, 900000, 9]]) {
+    const B = nettenBrut(net, K, 33030, ay, P);
+    yakin(aylikBordro(B, K, 33030, ay, P).net, net, 0.05);
+    assert.ok(B > net);
+  }
+});
+
+test('net maaş girişi: maliyet brüt + işveren SGK', () => {
+  const v = veriOlustur({ personel: [{ maas2026: 28075.5, aylik2026: Array(12).fill(1) }] });
+  v.varsayimlar.maasTipi = 'net';
+  v.varsayimlar.sgkIsveren = 20;
+  const s = hesaplaTemel(v);
+  const p = s.personel[0];
+  yakin(p.brut26, 33030, 0.05);
+  // Asgari ücretli: tüm yıl istisna sayesinde brüt sabit
+  yakin(p.maliyet26, 12 * 33030 * 1.2, 1);
 });

@@ -87,6 +87,116 @@ export function donem(otel = {}, yil) {
   return { sezon: false, gun, oranlar: AYLAR.map(() => 1), aylar: AYLAR.map((_, i) => i) };
 }
 
+// ---------------- Bordro (Türkiye) ----------------
+// Varsayılan 2026 parametreleri: Kullanıcı "Bordro Parametreleri" bölümünden değiştirebilir.
+// Dilim ve oranlar resmi kaynaklardan / mali müşavirden kontrol edilmelidir.
+export const BORDRO_VARSAYILAN = {
+  asgari2026: 33030,
+  asgari2027Ocak: '',
+  asgari2027Temmuz: '',
+  sgkIsci: 14,
+  issizlikIsci: 1,
+  damga: 0.759,
+  tavanKat: 7.5,
+  dilimler: [190000, 400000, 1500000, 5300000],
+  oranlar: [15, 20, 27, 35, 40],
+  dilimArtis2027: '',
+};
+
+export function gelirVergisi(matrah, dilimler, oranlar) {
+  let vergi = 0;
+  let alt = 0;
+  for (let i = 0; i < oranlar.length; i++) {
+    const ust = i < dilimler.length ? dilimler[i] : Infinity;
+    if (matrah <= alt) break;
+    vergi += (Math.min(matrah, ust) - alt) * (oranlar[i] / 100);
+    alt = ust;
+  }
+  return vergi;
+}
+
+/**
+ * Bir aylık bordro (tam ay).
+ * B: brüt maaş, K: yıl içindeki kümülatif gelir vergisi matrahı (bu işverende),
+ * A: o ayın brüt asgari ücreti, ay: 0-11 (asgari ücret istisnasının kümülatifi için).
+ */
+export function aylikBordro(B, K, A, ay, P) {
+  const kesintiOrani = (P.sgkIsci + P.issizlikIsci) / 100;
+  const sgkMatrah = Math.min(B, A * P.tavanKat);
+  const sgkKesinti = sgkMatrah * kesintiOrani;
+  const gvMatrah = B - sgkKesinti;
+  const gv = gelirVergisi(K + gvMatrah, P.dilimler, P.oranlar) - gelirVergisi(K, P.dilimler, P.oranlar);
+  // Asgari ücret istisnası: asgari ücretin vergisi kadar gelir vergisi ve asgari ücrete kadar damga vergisi alınmaz.
+  const asgariMatrah = Math.min(A, A * P.tavanKat) * (1 - kesintiOrani);
+  const istisna = gelirVergisi(asgariMatrah * (ay + 1), P.dilimler, P.oranlar) - gelirVergisi(asgariMatrah * ay, P.dilimler, P.oranlar);
+  const gvOdenecek = Math.max(0, gv - istisna);
+  const damga = Math.max(0, B - A) * (P.damga / 100);
+  const net = B - sgkKesinti - gvOdenecek - damga;
+  return { brut: B, net, gvMatrah, isverenMaliyeti: B + sgkMatrah * P.sgkIsveren / 100 };
+}
+
+/** Verilen net maaşı sağlayan brüt maaşı bulur. */
+export function nettenBrut(net, K, A, ay, P) {
+  if (net <= 0) return 0;
+  let alt = net;
+  let ust = net * 3;
+  for (let i = 0; i < 60; i++) {
+    const orta = (alt + ust) / 2;
+    if (aylikBordro(orta, K, A, ay, P).net < net) alt = orta;
+    else ust = orta;
+  }
+  return ust;
+}
+
+/** Yıla göre bordro parametreleri ve her ayın asgari ücreti. */
+export function bordroParametreleri(v, yil) {
+  const b = { ...BORDRO_VARSAYILAN, ...(v.bordro || {}) };
+  const dilimler26 = BORDRO_VARSAYILAN.dilimler.map((x, i) => ya(b.dilimler?.[i], x));
+  const oranlar = BORDRO_VARSAYILAN.oranlar.map((x, i) => ya(b.oranlar?.[i], x));
+  const temel = {
+    sgkIsci: ya(b.sgkIsci, 14),
+    issizlikIsci: ya(b.issizlikIsci, 1),
+    damga: ya(b.damga, 0.759),
+    tavanKat: ya(b.tavanKat, 7.5) || 7.5,
+    sgkIsveren: sayi(v.sgkIsveren),
+    oranlar,
+  };
+  const asgari26 = ya(b.asgari2026, BORDRO_VARSAYILAN.asgari2026);
+  if (yil === 2026) return { ...temel, dilimler: dilimler26, asgariAylik: AYLAR.map(() => asgari26) };
+  // 2027 boşsa: asgari ücret şirketin Ocak/Temmuz zammı kadar, dilimler enflasyon kadar artar.
+  const ocak = ya(b.asgari2027Ocak, asgari26 * (1 + ya(v.ocakZam, 0) / 100));
+  const temmuz = ya(b.asgari2027Temmuz, ocak * (1 + ya(v.temmuzZam, 0) / 100));
+  const artis = ya(b.dilimArtis2027, v.enflasyon);
+  return {
+    ...temel,
+    dilimler: dilimler26.map((x) => x * (1 + artis / 100)),
+    asgariAylik: AYLAR.map((_, i) => (i < 6 ? ocak : temmuz)),
+  };
+}
+
+/**
+ * Bir kişinin her ay için brüt maaşı ve işveren maliyeti (tam ay karşılığı).
+ * maasAy(i): o ayın maaşı (net veya brüt), O: ay oranları (0 = çalışmıyor).
+ * Kümülatif vergi matrahı çalışılan aylar boyunca birikir.
+ */
+function kisiAylikMaliyet(maasAy, O, P, netMi) {
+  let K = 0;
+  const brut = AYLAR.map(() => 0);
+  const maliyet = AYLAR.map(() => 0);
+  const net = AYLAR.map(() => 0);
+  AYLAR.forEach((_, i) => {
+    if (!O[i]) return;
+    const A = P.asgariAylik[i];
+    const B = netMi ? nettenBrut(maasAy(i), K, A, i, P) : maasAy(i);
+    const r = aylikBordro(B, K, A, i, P);
+    K += r.gvMatrah * O[i];
+    brut[i] = B;
+    net[i] = r.net;
+    maliyet[i] = r.isverenMaliyeti;
+  });
+  return { brut, net, maliyet };
+}
+
 /**
  * Oda satışları iki şekilde girilebilir:
  *  - 'toplam': otelin toplam oda sayısı, dönemde satılan toplam oda-gece ve toplam oda geliri
@@ -191,14 +301,17 @@ export function hesaplaTemel(veri, senaryo = {}) {
   // Maaş, ayın çalışılan kısmı kadar ödenir (sezon başlangıç/bitiş ayı kısmi).
   // Eski tip satırlar (kisi2026 + yılda çalışılan ay) da desteklenir.
   // "Kişi" = açık aylardaki ortalama kişi sayısı.
-  const sgk = yuzde(v.sgkIsveren);
+  const netMi = v.maasTipi !== 'brut';
+  const P26 = bordroParametreleri(v, 2026);
+  const P27 = bordroParametreleri(v, 2027);
   const O26 = donem26.oranlar;
   const O27 = donem27.oranlar;
   const acikOrt = (vektor, O) => bol(vektor.reduce((t, x, i) => t + x * O[i], 0), O.reduce((t, x) => t + x, 0));
+  const ilkAcik = (dizi, O) => dizi[O.findIndex((x) => x > 0)] ?? 0;
   const personel = (veri.personel || []).map((p) => {
     const maas26 = sayi(p.maas2026);
     const temmuzZam = ya(p.temmuzZam, v.temmuzZam);
-    // Ocak 2027 maaşı doğrudan girilmişse o, yoksa güncel maaş + Ocak zammı.
+    // Ocak 2027 maaşı doğrudan girilmişse o, yoksa güncel maaş + Ocak zammı. (Net veya brüt; giriş şekline göre.)
     const maasOcak27 = bos(p.maas2027)
       ? maas26 * (1 + ya(p.ocakZam, v.ocakZam) / 100)
       : sayi(p.maas2027);
@@ -221,11 +334,13 @@ export function hesaplaTemel(veri, senaryo = {}) {
     let onerilenAylik27;
     let kisiAy26;
     let kisiAy27;
-    let brut26;
-    let brut27;
+    let isveren26;
+    let isveren27;
     let kisi26;
     let kisi27;
     let onerilenKisi27;
+    let k26;
+    let k27;
 
     if (eskiTip) {
       kisi26 = sayi(p.kisi2026);
@@ -234,11 +349,16 @@ export function hesaplaTemel(veri, senaryo = {}) {
       aylik26 = AYLAR.map(() => (kisi26 * ay) / 12);
       aylik27 = AYLAR.map(() => (kisi27 * ay27) / 12);
       onerilenAylik27 = AYLAR.map(() => (onerilenKisi27 * ay27) / 12);
+      // Çalışılan aylar: 2026 yılın ilk "ay" ayı; 2027 yarısı Ocak'tan, yarısı Temmuz'dan itibaren.
       const ilkYari = Math.floor(ay27 / 2);
+      const Oe26 = AYLAR.map((_, i) => (i < ay ? 1 : 0));
+      const Oe27 = AYLAR.map((_, i) => (i < ilkYari || (i >= 6 && i < 6 + ay27 - ilkYari) ? 1 : 0));
+      k26 = kisiAylikMaliyet(() => maas26, Oe26, P26, netMi);
+      k27 = kisiAylikMaliyet(maas27Ay, Oe27, P27, netMi);
       kisiAy26 = kisi26 * ay;
       kisiAy27 = kisi27 * ay27;
-      brut26 = kisiAy26 * maas26;
-      brut27 = kisi27 * (maasOcak27 * ilkYari + maasTemmuz27 * (ay27 - ilkYari));
+      isveren26 = kisi26 * k26.maliyet.reduce((t, x) => t + x, 0);
+      isveren27 = kisi27 * k27.maliyet.reduce((t, x) => t + x, 0);
     } else {
       aylik26 = aylikMi26
         ? AYLAR.map((_, i) => (O26[i] > 0 ? sayi(p.aylik2026[i]) : 0))
@@ -253,21 +373,29 @@ export function hesaplaTemel(veri, senaryo = {}) {
       });
       aylik27 = AYLAR.map((_, i) =>
         O27[i] > 0 ? ya(aylikMi27 ? p.aylik2027[i] : '', onerilenAylik27[i]) : 0);
+      k26 = kisiAylikMaliyet(() => maas26, O26, P26, netMi);
+      k27 = kisiAylikMaliyet(maas27Ay, O27, P27, netMi);
       kisiAy26 = aylik26.reduce((t, x, i) => t + x * O26[i], 0);
       kisiAy27 = aylik27.reduce((t, x, i) => t + x * O27[i], 0);
-      brut26 = kisiAy26 * maas26;
-      brut27 = aylik27.reduce((t, x, i) => t + x * O27[i] * maas27Ay(i), 0);
+      isveren26 = aylik26.reduce((t, x, i) => t + x * O26[i] * k26.maliyet[i], 0);
+      isveren27 = aylik27.reduce((t, x, i) => t + x * O27[i] * k27.maliyet[i], 0);
       kisi26 = acikOrt(aylik26, O26);
       kisi27 = acikOrt(aylik27, O27);
       onerilenKisi27 = acikOrt(onerilenAylik27, O27);
     }
 
-    const maliyet26 = brut26 * (1 + sgk) + kisiAy26 * yanHak26;
-    const maliyet27 = brut27 * (1 + sgk) + kisiAy27 * yanHak27;
+    const maliyet26 = isveren26 + kisiAy26 * yanHak26;
+    const maliyet27 = isveren27 + kisiAy27 * yanHak27;
+    const acik26 = eskiTip ? AYLAR.map((_, i) => (i === 0 ? 1 : 0)) : O26;
     return {
       aylikMi26, aylikMi27, eskiTip, aylik26, aylik27, onerilenAylik27,
       kisi26, kisi27, onerilenKisi27, kisiAy26, kisiAy27, ay, ay27,
       maas26, maasOcak27, maasTemmuz27, ocakZam, temmuzZam, maliyet26, maliyet27,
+      // Brüt karşılıkları ve kişi başı aylık işveren maliyeti (ilk çalışılan ay, tam ay)
+      brut26: ilkAcik(k26.brut, acik26),
+      brutOcak27: k27.brut.find((x, i) => i < 6 && x > 0) || 0,
+      brutTemmuz27: k27.brut.find((x, i) => i >= 6 && x > 0) || 0,
+      kisiMaliyet26: ilkAcik(k26.maliyet, acik26) + yanHak26,
       kisiBasi27: bol(maliyet27, kisiAy27),
     };
   });
@@ -439,7 +567,9 @@ export function bosVeri() {
       odaFiyatZam: '',
       ocakZam: '',
       temmuzZam: '',
+      maasTipi: 'net',
       sgkIsveren: 22.75,
+      bordro: { ...BORDRO_VARSAYILAN, dilimler: [...BORDRO_VARSAYILAN.dilimler], oranlar: [...BORDRO_VARSAYILAN.oranlar] },
       kurumlarVergisi: 25,
       hedefKarMarji: 20,
       kategoriZam: {},

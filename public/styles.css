@@ -231,3 +231,7 @@ input[type="date"] { background: var(--girdi-zemin); border: 1px solid var(--ciz
 .personel-tablo th, .personel-tablo td { padding-left: 4px; padding-right: 4px; }
 .personel-tablo input[type="text"] { width: 140px; }
 .aylik-ozet td .yil { display: block; font-size: 11px; color: var(--metin-3); }
+
+.bordro-detay { margin: 0 0 16px; padding: 8px 12px; border: 1px dashed var(--cizgi); border-radius: 8px; }
+.bordro-detay summary { cursor: pointer; font-weight: 600; font-size: 13px; color: var(--metin-2); }
+.bordro-detay[open] summary { margin-bottom: 8px; }

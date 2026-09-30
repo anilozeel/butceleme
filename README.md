@@ -21,7 +21,7 @@ Program boş açılır. Bütçe üç adımda hazırlanır:
 | Sekme | Girilenler |
 |---|---|
 | **Odalar & Gelirler** | Yıl boyu açık mı, sezonluk mu (ör. 15 Mayıs – 30 Eylül); **toplam** oda sayısı, satılan oda-gece ve oda geliri — veya istenirse oda tiplerine göre; yiyecek-içecek, SPA gibi diğer gelirler |
-| **Personel** | Departman, pozisyon, **her ay kaç kişi çalıştığı**, güncel brüt maaş, yan haklar, SGK işveren payı |
+| **Personel** | Departman, pozisyon, **her ay kaç kişi çalıştığı**, güncel **net** (veya brüt) maaş, yan haklar, SGK işveren payı, bordro parametreleri |
 | **Giderler** | Vergi ve harçlar, kira, elektrik, su, doğalgaz, komisyonlar, pazarlama, bakım, sigorta, genel giderler… ve her birinin nasıl oluştuğu (sabit / değişken / gelirin yüzdesi) |
 
 ### 2 · 2027 Kararları — kararları verin
@@ -50,6 +50,11 @@ Nasıl göründüğünü görmek için **Diğer → Örnek veriyi yükle** ile 1
 - **Toplam oda girişi**: ortalama fiyat = oda geliri ÷ satılan oda-gece; doluluk = satılan oda-gece ÷ (oda sayısı × açık gün).
 - **Oda geliri** = oda adedi × açık gün × doluluk × ortalama fiyat
 - **2027 fiyat** = 2026 fiyat × (1 + zam)
+- **Net maaş → brüt**: SGK işçi payı (%14) + işsizlik (%1), kümülatif gelir vergisi dilimleri, asgari ücret
+  gelir ve damga vergisi istisnası, damga vergisi (%0,759) eklenerek her ay için brüt bulunur.
+  İşveren maliyeti = brüt + SGK işveren payı (SGK tavanına kadar). Asgari ücret ve vergi dilimleri
+  "Bordro parametreleri" bölümünden değiştirilebilir; 2027 değerleri 2027 Kararları → Genel Zamlar'dadır.
+  **Varsayılan parametreler tahminidir, mali müşavirinizle kontrol edin.**
 - **Personel maliyeti** = Σ (o ay çalışan kişi × brüt maaş × ayın çalışılan oranı) × (1 + SGK işveren payı) + yan haklar.
   Sezonun ilk/son ayı kısmi ise maaş çalışılan gün ÷ 30 oranında sayılır (ör. 15–31 Mayıs = 17/30).
   2027'de Ocak–Haziran ayları Ocak maaşıyla (zam veya doğrudan girilen tutar), Temmuz–Aralık ayları Temmuz zamlı maaşla hesaplanır.

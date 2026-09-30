@@ -1,6 +1,6 @@
 import {
   hesapla, bosVeri, KATEGORILER, GIDER_TIPLERI, DUYARLILIK_FIYAT, DUYARLILIK_DOLULUK,
-  AYLAR, aylikVarMi, donem, yilaTasi,
+  AYLAR, aylikVarMi, donem, yilaTasi, BORDRO_VARSAYILAN, bordroParametreleri,
 } from './calc.js';
 
 let veri = bosVeri();
@@ -339,6 +339,33 @@ function tipOda27(satirlar, v) {
     </section>`;
 }
 
+// ---------------- Maaş tipi ve bordro ----------------
+const netMi = () => veri.varsayimlar.maasTipi !== 'brut';
+const maasAdi = () => (netMi() ? 'net' : 'brüt');
+const bordro27 = () => bordroParametreleri(veri.varsayimlar, 2027);
+
+function bordroParametreleriHtml() {
+  const b = 'varsayimlar.bordro';
+  const d = BORDRO_VARSAYILAN;
+  return `<details class="bordro-detay">
+      <summary>2026 bordro parametreleri (asgari ücret, vergi dilimleri)</summary>
+      <p class="ipucu">Varsayılanlar tahmini 2026 değerleridir; mali müşavirinizle kontrol edip gerekirse düzeltin.</p>
+      <div class="form-izgara">
+        ${alan('Asgari ücret (brüt) 2026', sayiGirdi(`${b}.asgari2026`, { ph: nf0.format(d.asgari2026) }))}
+        ${alan('SGK işçi payı (%)', sayiGirdi(`${b}.sgkIsci`, { ph: String(d.sgkIsci) }))}
+        ${alan('İşsizlik işçi payı (%)', sayiGirdi(`${b}.issizlikIsci`, { ph: String(d.issizlikIsci) }))}
+        ${alan('Damga vergisi (%)', sayiGirdi(`${b}.damga`, { ph: String(d.damga) }))}
+        ${alan('SGK tavanı (asgari ücretin katı)', sayiGirdi(`${b}.tavanKat`, { ph: String(d.tavanKat) }))}
+      </div>
+      <h3>Gelir vergisi tarifesi (ücretliler, yıllık kümülatif)</h3>
+      <div class="kaydir"><table class="tablo" style="max-width:520px"><thead><tr><th class="sol">Dilim</th><th>Üst sınır</th><th>Oran %</th></tr></thead><tbody>
+        ${d.oranlar.map((_, i) => `<tr><td class="sol">${i + 1}. dilim</td>
+          <td class="girdi">${i < d.dilimler.length ? sayiGirdi(`${b}.dilimler.${i}`, { ph: nf0.format(d.dilimler[i]) }) : 've üzeri'}</td>
+          <td class="girdi">${sayiGirdi(`${b}.oranlar.${i}`, { cls: 'kisa', ph: String(d.oranlar[i]) })}</td></tr>`).join('')}
+      </tbody></table></div>
+    </details>`;
+}
+
 const SEKMELER = {
   // ======================= 1 · 2026 VERİLERİ =======================
   'v26-odalar': () => {
@@ -394,32 +421,39 @@ const SEKMELER = {
         cls: 'ay-girdi', min: 0, etiket: `${AYLAR[m]} 2026 kişi`,
         ph: sonuc.personel[i]?.eskiTip ? '' : '0' })}</td>`).join('')}
       ${cikti(`personel.${i}.kisi26`, 'kisi')}
-      <td class="girdi">${sayiGirdi(`personel.${i}.maas2026`, { min: 0, etiket: 'Güncel brüt maaş' })}</td>
+      <td class="girdi">${sayiGirdi(`personel.${i}.maas2026`, { min: 0, etiket: `Güncel ${maasAdi()} maaş` })}</td>
+      ${netMi() ? cikti(`personel.${i}.brut26`) : ''}
       <td class="girdi">${sayiGirdi(`personel.${i}.yanHak`, { min: 0, ph: '0', etiket: 'Aylık yan hak' })}</td>
+      ${cikti(`personel.${i}.kisiMaliyet26`)}
       ${cikti(`personel.${i}.maliyet26`)}
       <td>${silDugme('personel', i)}</td></tr>`).join('');
     return `
     <section class="kart">
       <h2>2026 Personel ve Maaşlar</h2>
       <p class="aciklama">Her pozisyonda <strong>her ay kaç kişi çalıştığını</strong> girin. Aynı sayı her ay geçerliyse ilk kutuya (→) yazın, tüm aylara dağıtılır.
-        Maaş: güncel <strong>brüt</strong> aylık maaş. Yemek, servis, lojman gibi yan hakları kişi başı aylık tutar olarak yazın.
+        Maaş: çalışana ödenen güncel aylık <strong>${maasAdi()}</strong> maaş${netMi() ? ' (elden/bankaya yatan)' : ''}. Yemek, servis, lojman gibi yan hakları kişi başı aylık tutar olarak yazın.
         ${d.sezon ? `Sezon ${tarihBicim(d.bas)} – ${tarihBicim(d.bit)}: kısmi aylarda maaş çalışılan gün / 30 oranında hesaplanır.` : ''}</p>
       <div class="form-izgara" style="margin-bottom:12px">
+        ${alan('Maaşları nasıl giriyorsunuz?', secim('varsayimlar.maasTipi', { net: 'Net maaş', brut: 'Brüt maaş' }, { yeniden: true, etiket: 'Maaş tipi' }),
+          netMi() ? 'Net maaş; SGK, gelir vergisi (asgari ücret istisnası dahil) ve damga vergisi eklenerek brüte çevrilir.' : '')}
         ${alan('SGK işveren payı (%)', sayiGirdi('varsayimlar.sgkIsveren'), 'İşveren SGK + işsizlik primi; teşvikten yararlanıyorsanız indirimli oranı girin. Bordronuzla kontrol edin.')}
       </div>
+      ${bordroParametreleriHtml()}
       <div class="kaydir"><table class="tablo personel-tablo">
         <thead><tr><th class="sol">Departman</th><th class="sol">Pozisyon</th><th>Tümü<span class="yil">→</span></th>
           ${d.aylar.map((m) => `<th>${ayBaslik(m, d.oranlar[m])}</th>`).join('')}
-          <th>Ort. Kişi<span class="yil">2026</span></th><th>Brüt Maaş<span class="yil">güncel / ay</span></th><th>Yan Hak<span class="yil">kişi / ay</span></th>
-          <th>Maliyet<span class="yil">2026</span></th><th></th></tr></thead>
+          <th>Ort. Kişi<span class="yil">2026</span></th><th>${netMi() ? 'Net' : 'Brüt'} Maaş<span class="yil">güncel / ay</span></th>
+          ${netMi() ? '<th>Brüt Karşılığı<span class="yil">ilk ay</span></th>' : ''}<th>Yan Hak<span class="yil">kişi / ay</span></th>
+          <th>İşveren Maliyeti<span class="yil">kişi / ay</span></th><th>Maliyet<span class="yil">2026 toplam</span></th><th></th></tr></thead>
         <tbody>${satirlar || `<tr><td class="sol bos" colspan="${d.aylar.length + 8}">Henüz personel yok. Aşağıdan ekleyin.</td></tr>`}
           <tr class="toplam"><td class="sol" colspan="3">Toplam kişi</td>
             ${d.aylar.map((m) => cikti(`personelOzet.aylik26.${m}`, 'kisi')).join('')}
-            ${cikti('personelOzet.kisi26', 'kisi')}<td colspan="2"></td>${cikti('personelOzet.maliyet26')}<td></td></tr>
+            ${cikti('personelOzet.kisi26', 'kisi')}<td colspan="${netMi() ? 4 : 3}"></td>${cikti('personelOzet.maliyet26')}<td></td></tr>
         </tbody>
       </table></div>
       <button type="button" class="ekle" data-ekle="personel">+ Personel satırı ekle</button>
-      <p class="ipucu">Maliyet = Σ (ay kişi sayısı × brüt maaş × ayın çalışılan oranı) × (1 + SGK işveren payı) + yan haklar.</p>
+      <p class="ipucu">İşveren maliyeti = brüt maaş + SGK işveren payı. Toplam = Σ (ay kişi sayısı × ayın çalışılan oranı × kişi başı maliyet) + yan haklar.
+        ${netMi() ? 'Gelir vergisi kümülatif hesaplandığından brüt maaş sezon ilerledikçe artabilir.' : ''}</p>
     </section>`;
   },
 
@@ -487,6 +521,15 @@ const SEKMELER = {
       </div>
     </section>
     <section class="kart">
+      <h2>2027 Bordro Varsayımları</h2>
+      <p class="aciklama">Net maaşın brüte çevrilmesinde kullanılır. 2027 rakamları açıklanınca buraya yazın; boş bırakılırsa tahmini değer (gri) kullanılır.</p>
+      <div class="form-izgara">
+        ${alan('Asgari ücret (brüt) – Ocak 2027', sayiGirdi('varsayimlar.bordro.asgari2027Ocak', { ph: nf0.format(bordro27().asgariAylik[0]) }), 'Boşsa 2026 asgari ücreti + Ocak maaş zammı.')}
+        ${alan('Asgari ücret (brüt) – Temmuz 2027', sayiGirdi('varsayimlar.bordro.asgari2027Temmuz', { ph: nf0.format(bordro27().asgariAylik[6]) }), 'Temmuz\'da artış yoksa Ocak ile aynı tutarı yazın.')}
+        ${alan('Gelir vergisi dilimlerindeki artış (%)', sayiGirdi('varsayimlar.bordro.dilimArtis2027', { ph: `Enflasyon (${zamPh(veri.varsayimlar.enflasyon)})` }), 'Yeniden değerleme oranı.')}
+      </div>
+    </section>
+    <section class="kart">
       <h2>Gider Kategorilerine Göre 2027 Zamları</h2>
       <p class="aciklama">Kira, elektrik, vergi gibi kalemler için beklediğiniz artış. Boş bırakılanlar genel enflasyonu kullanır.</p>
       <div class="form-izgara">
@@ -541,9 +584,10 @@ const SEKMELER = {
       ${cikti(`personel.${i}.kisi27`, 'kisi')}
       ${roPara(p.maas2026)}
       <td class="girdi">${sayiGirdi(`personel.${i}.ocakZam`, { cls: 'kisa', ph: zamPh(v.ocakZam), etiket: 'Ocak zammı' })}</td>
-      <td class="girdi">${sayiGirdi(`personel.${i}.maas2027`, { ph: 'veya tutar', etiket: 'Ocak 2027 brüt maaş (doğrudan)' })}</td>
+      <td class="girdi">${sayiGirdi(`personel.${i}.maas2027`, { ph: 'veya tutar', etiket: `Ocak 2027 ${maasAdi()} maaş (doğrudan)` })}</td>
       <td class="girdi">${sayiGirdi(`personel.${i}.temmuzZam`, { cls: 'kisa', ph: zamPh(v.temmuzZam), etiket: 'Temmuz zammı' })}</td>
       ${cikti(`personel.${i}.maasOcak27`)}${cikti(`personel.${i}.maasTemmuz27`)}
+      ${netMi() ? cikti(`personel.${i}.brutOcak27`) + cikti(`personel.${i}.brutTemmuz27`) : ''}
       ${cikti(`personel.${i}.maliyet26`)}${cikti(`personel.${i}.maliyet27`)}
       <td>${silDugme('personel', i)}</td></tr>`;
     }).join('');
@@ -551,20 +595,22 @@ const SEKMELER = {
     <section class="kart">
       <h2>2027 Personel ve Maaş Kararları</h2>
       <p class="aciklama">2027'de her ay kaç kişi çalışacağını ve maaş zammını belirleyin. Zam kutusu boşsa genel zam
-        (Ocak ${zamPh(v.ocakZam)}, Temmuz ${zamPh(v.temmuzZam)}) uygulanır; zam yerine Ocak 2027 brüt maaşını doğrudan da yazabilirsiniz.
+        (Ocak ${zamPh(v.ocakZam)}, Temmuz ${zamPh(v.temmuzZam)}) uygulanır; zam yerine Ocak 2027 ${maasAdi()} maaşını doğrudan da yazabilirsiniz.
+        ${netMi() ? 'Zamlar net maaşa uygulanır; brüt karşılığı 2027 bordro parametreleriyle hesaplanır.' : ''}
         Ocak–Haziran ayları Ocak maaşıyla, Temmuz–Aralık ayları Temmuz zamlı maaşla hesaplanır.</p>
       <p class="aciklama">${fnAlan('kisiOneri', 'span')}</p>
       <div class="kaydir"><table class="tablo personel-tablo">
         <thead><tr><th class="sol">Departman</th><th class="sol">Pozisyon</th><th>Doluluğa<span class="yil">bağlı</span></th><th>Tümü<span class="yil">→</span></th>
           ${d.aylar.map((m) => `<th>${ayBaslik(m, d.oranlar[m])}</th>`).join('')}
-          <th>Ort. Kişi<span class="yil">2027</span></th><th>Brüt Maaş<span class="yil">güncel</span></th><th>Ocak Zammı<span class="yil">%</span></th>
-          <th>veya Ocak Maaşı<span class="yil">brüt, doğrudan</span></th><th>Temmuz Zammı<span class="yil">%</span></th>
-          <th>Brüt Maaş<span class="yil">Oca 2027</span></th><th>Brüt Maaş<span class="yil">Tem 2027</span></th>
+          <th>Ort. Kişi<span class="yil">2027</span></th><th>${netMi() ? 'Net' : 'Brüt'} Maaş<span class="yil">güncel</span></th><th>Ocak Zammı<span class="yil">%</span></th>
+          <th>veya Ocak Maaşı<span class="yil">${maasAdi()}, doğrudan</span></th><th>Temmuz Zammı<span class="yil">%</span></th>
+          <th>${netMi() ? 'Net' : 'Brüt'} Maaş<span class="yil">Oca 2027</span></th><th>${netMi() ? 'Net' : 'Brüt'} Maaş<span class="yil">Tem 2027</span></th>
+          ${netMi() ? '<th>Brüt Karşılığı<span class="yil">Oca 2027</span></th><th>Brüt Karşılığı<span class="yil">Tem 2027</span></th>' : ''}
           <th>Maliyet<span class="yil">2026</span></th><th>Maliyet<span class="yil">2027</span></th><th></th></tr></thead>
         <tbody>${satirlar || `<tr><td class="sol bos" colspan="${d.aylar.length + 14}">Önce 2026 personelini girin.</td></tr>`}
           <tr class="toplam"><td class="sol" colspan="4">Toplam kişi</td>
             ${d.aylar.map((m) => cikti(`personelOzet.aylik27.${m}`, 'kisi')).join('')}
-            ${cikti('personelOzet.kisi27', 'kisi')}<td colspan="6"></td>${cikti('personelOzet.maliyet26')}${cikti('personelOzet.maliyet27')}<td></td></tr>
+            ${cikti('personelOzet.kisi27', 'kisi')}<td colspan="${netMi() ? 8 : 6}"></td>${cikti('personelOzet.maliyet26')}${cikti('personelOzet.maliyet27')}<td></td></tr>
         </tbody>
       </table></div>
       <button type="button" class="ekle" data-ekle="personel" data-yeni27="1">+ 2027'de yeni pozisyon ekle</button>
@@ -819,6 +865,7 @@ function veriyiKoy(yeni) {
     if (!Array.isArray(veri[liste])) veri[liste] = [];
   }
   veri.varsayimlar.kategoriZam ||= {};
+  veri.varsayimlar.bordro = { ...temel.varsayimlar.bordro, ...(yeni.varsayimlar?.bordro || {}) };
   if (!yeni.odaGiris) veri.odaGiris = veri.odalar.length ? 'tip' : 'toplam';
   veri.odaToplam = { ...temel.odaToplam, ...(yeni.odaToplam || {}) };
   // Eski kayıtlar: tek kişi sayısı girilmiş, yıl boyu çalışan satırları aylık girişe çevir.
