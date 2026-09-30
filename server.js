@@ -84,6 +84,16 @@ async function api(req, res, yol) {
     await kaydet(dosyaAdi, veri);
     return gonder(res, 200, { tamam: true, zaman: new Date().toISOString() });
   }
+  if (yol === '/api/kur' && req.method === 'GET') {
+    // TCMB günlük kurları (internet bağlantısı gerekir)
+    try {
+      const yanit = await fetch('https://www.tcmb.gov.tr/kurlar/today.xml', { signal: AbortSignal.timeout(8000) });
+      if (!yanit.ok) throw new Error(`TCMB ${yanit.status}`);
+      return gonder(res, 200, await yanit.text(), 'application/xml; charset=utf-8');
+    } catch (e) {
+      return gonder(res, 502, { hata: 'TCMB kurlarına ulaşılamadı: ' + e.message });
+    }
+  }
   if (yol === '/api/ornek' && req.method === 'GET') {
     return gonder(res, 200, await fs.readFile(ORNEK_DOSYASI, 'utf8'));
   }

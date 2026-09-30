@@ -254,3 +254,5 @@ input[type="date"] { background: var(--girdi-zemin); border: 1px solid var(--ciz
 .akis .ok::before { content: '→ '; }
 .tablo td.net-hucre { background: var(--iyi-zemin); font-weight: 700; }
 @media print { .uygulama-menu { display: none; } }
+.tablo td.doviz-hucre { background: var(--vurgu-zemin); font-weight: 600; }
+.tablo tr.acik-liste td { background: var(--vurgu-zemin); }

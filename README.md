@@ -73,7 +73,7 @@ Nasıl göründüğünü görmek için **Diğer → Örnek veriyi yükle** ile 1
 - Her günün ilk kaydında bir önceki hal `data/yedek/` klasörüne yedeklenir.
 - **Yedek indir / Yedek yükle** ile veriyi dosya olarak taşıyabilirsiniz.
 - **Excel'e aktar (CSV)** Türkçe Excel ile doğrudan açılır.
-- **Yazdır** özet sayfasını yazdırır (PDF olarak da kaydedilebilir).
+- **PDF olarak al** özet sayfasını yazdırır; yazdırma penceresinde "PDF olarak kaydet" seçilir.
 
 Sunucu varsayılan olarak yalnızca bu bilgisayardan erişilebilir (`127.0.0.1`).
 Port değiştirmek için: `PORT=8080 npm start`.
@@ -82,8 +82,10 @@ Port değiştirmek için: `PORT=8080 npm start`.
 
 **http://localhost:3000/net-fiyat.html** (veya üst menüden **Net Oda Fiyatı**)
 
-Acentelere verilen komisyon dahil satış fiyatlarından otele kalan net fiyatı hesaplar.
+Acentelere verilen komisyon dahil satış fiyatlarından otele kalan net fiyatı hesaplar. Fiyatlar **TL** girilir.
 
+0. **Kayıtlı listeler:** Birden çok fiyat listesi isimle saklanır (ör. "2027 Yaz – Acenteler"); **Yeni liste**,
+   **kopya**, **sil**; listeler tablosundan eski listeler açılıp bakılabilir. Değişiklikler otomatik kaydedilir.
 1. **Oranlar:** Acente komisyonu (varsayılan %20), Erken Rezervasyon indirimi, oda hesabının kaç kişi üzerinden yapılacağı (varsayılan 2).
 2. **Fiyat listesi:** Dönem, oda tipi ve **kişi başı** satış fiyatı. İstenirse dönem bazında farklı Erken Rezervasyon oranı.
 3. **Hesap sırası:** önce Erken Rezervasyon indirimi, sonra komisyon düşülür:
@@ -93,6 +95,9 @@ Acentelere verilen komisyon dahil satış fiyatlarından otele kalan net fiyatı
    Örnek: 100 € → %15 indirim → 85 € → %20 komisyon → **68 € net** (toplam kesinti %32, %35 değil).
 4. **Oda fiyatı** = kişi başı fiyat × 2 kişi (odalar 3 kişilik olsa da).
 5. **Ters hesap:** hedef net fiyat yazılır, gereken satış fiyatı bulunur.
+6. **Döviz (isteğe bağlı):** EUR / USD / GBP seçilir, kur elle yazılır veya **TCMB kurlarını getir** ile
+   TCMB döviz alış kuru çekilir (internet gerekir). Net fiyatların döviz karşılığı = TL ÷ kur.
+7. **PDF olarak al:** yazdırma penceresinde hedef olarak **"PDF olarak kaydet"** seçilir; A4 yatay, sade bir fiyat raporu çıkar.
 
 Veriler `data/net-fiyat.json` dosyasına kaydedilir.
 
